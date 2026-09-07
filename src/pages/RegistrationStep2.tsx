@@ -1,596 +1,420 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-const API_BASE = import.meta.env.VITE_API_URL || "http://localhost:5000/api";
+import {
+  ArrowLeft,
+  ArrowRight,
+  ChevronDown,
+  LockKeyhole,
+  Scale,
+  ShieldCheck,
+} from "lucide-react";
 
 export default function RegistrationStep2() {
   const navigate = useNavigate();
 
-  // Step 2 form fields
-  const [department, setDepartment] = useState("");
-  const [designation, setDesignation] = useState("");
-  const [employeeId, setEmployeeId] = useState("");
-  const [jurisdiction, setJurisdiction] = useState("");
-  const [dateOfJoining, setDateOfJoining] = useState("");
-  const [supervisingOfficer, setSupervisingOfficer] = useState("");
-  const [officialEmail, setOfficialEmail] = useState("");
-  const [officialPhone, setOfficialPhone] = useState("");
+  const [formData, setFormData] = useState({
+    department: "",
+    designation: "",
+    employeeId: "",
+    jurisdiction: "",
+    joiningDate: "",
+    supervisingOfficer: "",
+    officialEmail: "",
+    officialPhone: "",
+  });
 
-  // OTP
-  const [otp, setOtp] = useState("");
-  const [otpSent, setOtpSent] = useState(false);
-  const [emailVerified, setEmailVerified] = useState(false);
-  //Phone
-  const [phoneOtp, setPhoneOtp] = useState("");
-  const [phoneOtpSent, setPhoneOtpSent] = useState(false);
-  const [phoneVerified, setPhoneVerified] = useState(false);
+  useEffect(() => {
+    window.scrollTo(0, 0);
 
-  // UI states
-  const [loading, setLoading] = useState(false);
-  const [message, setMessage] = useState("");
-  const [error, setError] = useState("");
+    const savedData = sessionStorage.getItem("registrationStep2");
 
-  // Continue is enabled when all required fields are complete.
-  // Email and phone OTP verification are temporarily disabled.
-  const isStep2Complete =
-    department.trim() !== "" &&
-    designation.trim() !== "" &&
-    employeeId.trim() !== "" &&
-    jurisdiction !== "" &&
-    dateOfJoining !== "" &&
-    supervisingOfficer.trim() !== "" &&
-    officialEmail.trim() !== "" &&
-  // Continue is enabled when all required fields are complete.
-  // Email and phone OTP verification are temporarily disabled.
-  const isStep2Complete =
-    department.trim() !== "" &&
-    designation.trim() !== "" &&
-    employeeId.trim() !== "" &&
-    jurisdiction !== "" &&
-    dateOfJoining !== "" &&
-    supervisingOfficer.trim() !== "" &&
-    officialEmail.trim() !== "" &&
-    officialPhone.trim() !== "";
-
-  // Send OTP
-  const handleSendOTP = async () => {
-    setError("");
-    setMessage("");
-
-    const email = officialEmail.trim().toLowerCase();
-
-    if (!email) {
-      setError("Please enter your official email.");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const response = await fetch(`${API_BASE}/otp/send`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ email }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Unable to send OTP.");
+    if (savedData) {
+      try {
+        setFormData(JSON.parse(savedData));
+      } catch {
+        // Ignore invalid saved data
       }
-
-      setOtpSent(true);
-      setEmailVerified(false);
-      setOtp("");
-
-      setMessage("OTP sent successfully. Please check your email.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "Unable to send OTP.");
-    } finally {
-      setLoading(false);
     }
+  }, []);
+
+  const handleChange = (
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
+  ) => {
+    setFormData((previous) => ({
+      ...previous,
+      [e.target.name]: e.target.value,
+    }));
   };
 
-  // Verify OTP
-  const handleVerifyOTP = async () => {
-    setError("");
-    setMessage("");
+  const isComplete =
+    formData.department.trim() !== "" &&
+    formData.designation.trim() !== "" &&
+    formData.employeeId.trim() !== "" &&
+    formData.jurisdiction !== "" &&
+    formData.joiningDate !== "" &&
+    formData.supervisingOfficer.trim() !== "" &&
+    formData.officialEmail.trim() !== "" &&
+    formData.officialPhone.trim() !== "";
 
-    if (otp.length !== 6) {
-      setError("Please enter the 6-digit OTP.");
-      return;
-    }
+  const handleContinue = (e: React.FormEvent) => {
+    e.preventDefault();
 
-    setLoading(true);
+    if (!isComplete) return;
 
-    try {
-      const response = await fetch(`${API_BASE}/otp/verify`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          email: officialEmail.trim().toLowerCase(),
-          otp,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Invalid OTP.");
-      }
-
-      setEmailVerified(true);
-      setMessage("Email verified successfully.");
-    } catch (err) {
-      setError(err instanceof Error ? err.message : "OTP verification failed.");
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleSendPhoneOTP = async () => {
-    setError("");
-    setMessage("");
-
-    const phone = officialPhone.trim();
-
-    if (!/^\d{10}$/.test(phone)) {
-      setError("Please enter a valid 10-digit phone number.");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const response = await fetch(`${API_BASE}/phone-otp/send`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ phone }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Unable to send phone OTP.");
-      }
-
-      setPhoneOtpSent(true);
-      setPhoneVerified(false);
-      setPhoneOtp("");
-
-      setMessage("Phone OTP sent successfully. Please check your phone.");
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Unable to send phone OTP.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleVerifyPhoneOTP = async () => {
-    setError("");
-    setMessage("");
-
-    if (phoneOtp.length !== 6) {
-      setError("Please enter the 6-digit phone OTP.");
-      return;
-    }
-
-    setLoading(true);
-
-    try {
-      const response = await fetch(`${API_BASE}/phone-otp/verify`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          phone: officialPhone.trim(),
-          otp: phoneOtp,
-        }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.message || "Invalid phone OTP.");
-      }
-
-      setPhoneVerified(true);
-      setMessage("Phone number verified successfully.");
-    } catch (err) {
-      setError(
-        err instanceof Error ? err.message : "Phone OTP verification failed.",
-      );
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  // Continue to Step 3
-  const handleContinue = () => {
-    if (!isStep2Complete) {
-      setError("Please complete all required fields.");
-      return;
-    }
-
-    // Save ALL Step 2 information
     sessionStorage.setItem(
       "registrationStep2",
-      JSON.stringify({
-        department: department.trim(),
-        designation: designation.trim(),
-        employeeId: employeeId.trim(),
-        jurisdiction,
-        dateOfJoining,
-        supervisingOfficer: supervisingOfficer.trim(),
-        officialEmail: officialEmail.trim().toLowerCase(),
-        officialPhone: officialPhone.trim(),
-      }),
+      JSON.stringify(formData)
     );
 
     navigate("/register/step3");
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-100 via-blue-100 to-amber-100 flex items-center justify-center p-6">
-      <div className="w-full max-w-5xl bg-white rounded-3xl shadow-xl p-8">
-        {/* Header */}
-        <div className="mb-5">
-          <h1 className="text-3xl font-bold text-green-900">
-            Create Official Account
-          </h1>
+    <div className="min-h-screen w-full bg-[#f5f9fd] text-slate-900">
 
-          <p className="text-sm text-gray-600 mt-1">
-            Please provide your legal information exactly as it
-            <br />
-            appears on official documents.
-          </p>
-        </div>
+      {/* ================= HEADER ================= */}
 
-        {/* Progress Steps */}
-        <div className="w-full max-w-md border border-gray-300 rounded-2xl p-4 mb-6">
-          <div className="flex items-center justify-between">
-            {/* Step 1 */}
-            <div className="flex flex-col items-center">
-              <div className="w-7 h-7 rounded-md bg-green-900 text-white flex items-center justify-center text-sm font-medium">
-                1
-              </div>
+      <header className="flex h-[62px] w-full items-center justify-between border-b border-[#dce6f0] bg-white px-5 lg:px-8">
+        <div className="flex items-center gap-2.5">
+          <img
+            src="/logo.jpg"
+            alt="National Emblem"
+            className="h-[48px] w-[48px] object-contain"
+          />
 
-              <span className="text-xs text-green-900 mt-1">Basic Info</span>
-            </div>
+          <div>
+            <h1 className="text-[20px] font-bold leading-none tracking-[0.04em] text-[#123f70]">
+              JANMITRA
+            </h1>
 
-            <div className="h-px bg-green-900 w-20" />
-
-            {/* Step 2 */}
-            <div className="flex flex-col items-center">
-              <div className="w-7 h-7 rounded-md bg-green-900 text-white flex items-center justify-center text-sm font-medium">
-                2
-              </div>
-
-              <span className="text-xs text-green-900 mt-1">Official Info</span>
-            </div>
-
-            <div className="h-px bg-gray-300 w-20" />
-
-            {/* Step 3 */}
-            <div className="flex flex-col items-center">
-              <div className="w-7 h-7 rounded-md bg-gray-200 text-gray-600 flex items-center justify-center text-sm font-medium">
-                3
-              </div>
-
-              <span className="text-xs text-gray-500 mt-1">Evidence</span>
-            </div>
+            <p className="mt-1 text-[9px] leading-none text-[#6b7d91]">
+              Legal Investigation System
+            </p>
           </div>
         </div>
 
-        {/* Form Card */}
-        <div className="border border-gray-300 rounded-2xl p-5">
-          <div className="grid grid-cols-2 gap-x-6 gap-y-5">
-            {/* Department */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-2">
-                Department / Agency Name
-              </label>
-
-              <input
-                type="text"
-                value={department}
-                onChange={(e) => setDepartment(e.target.value)}
-                placeholder="e.g. Federal Bureau of Investigation"
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:border-green-900 focus:ring-1 focus:ring-green-900 outline-none text-sm"
-              />
-            </div>
-
-            {/* Designation */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-2">
-                Designation / Rank
-              </label>
-
-              <input
-                type="text"
-                value={designation}
-                onChange={(e) => setDesignation(e.target.value)}
-                placeholder="e.g. Special Agent"
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:border-green-900 focus:ring-1 focus:ring-green-900 outline-none text-sm"
-              />
-            </div>
-
-            {/* Employee ID */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-2">
-                Employee / Badge ID
-              </label>
-
-              <input
-                type="text"
-                value={employeeId}
-                onChange={(e) => setEmployeeId(e.target.value)}
-                placeholder="Enter official ID number"
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:border-green-900 focus:ring-1 focus:ring-green-900 outline-none text-sm"
-              />
-            </div>
-
-            {/* Jurisdiction */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-2">
-                Jurisdiction / Location
-              </label>
-
-              <select
-                value={jurisdiction}
-                onChange={(e) => setJurisdiction(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:border-green-900 focus:ring-1 focus:ring-green-900 outline-none text-sm text-gray-500"
-              >
-                <option value="">Select jurisdiction level</option>
-                <option value="National">National</option>
-                <option value="State">State</option>
-                <option value="District">District</option>
-                <option value="Local">Local</option>
-              </select>
-            </div>
-
-            {/* Date of Joining */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-2">
-                Date of Joining
-              </label>
-
-              <input
-                type="date"
-                value={dateOfJoining}
-                onChange={(e) => setDateOfJoining(e.target.value)}
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:border-green-900 focus:ring-1 focus:ring-green-900 outline-none text-sm"
-              />
-            </div>
-
-            {/* Supervising Officer */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-2">
-                Supervising Officer
-              </label>
-
-              <input
-                type="text"
-                value={supervisingOfficer}
-                onChange={(e) => setSupervisingOfficer(e.target.value)}
-                placeholder="Name or Title"
-                className="w-full px-3 py-2.5 rounded-lg border border-gray-300 focus:border-green-900 focus:ring-1 focus:ring-green-900 outline-none text-sm"
-              />
-            </div>
-
-            {/* Official Email */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-2">
-                Official Email
-              </label>
-
-              <div className="flex gap-2">
-                <input
-                  type="email"
-                  value={officialEmail}
-                  onChange={(e) => {
-                    setOfficialEmail(e.target.value);
-                    setEmailVerified(false);
-                    setOtpSent(false);
-                    setOtp("");
-                    setMessage("");
-                    setError("");
-                  }}
-                  placeholder="Enter Email"
-                  disabled={emailVerified}
-                  className="flex-1 px-3 py-2.5 rounded-lg border border-gray-300 focus:border-green-900 focus:ring-1 focus:ring-green-900 outline-none text-sm disabled:bg-gray-100"
-                />
-
-                <button
-                  type="button"
-                  onClick={handleSendOTP}
-                  disabled={loading || !officialEmail.trim() || emailVerified}
-                  className={`px-4 py-2.5 rounded-lg text-sm font-medium ${
-                    loading || !officialEmail.trim() || emailVerified
-                      ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                      : "bg-green-900 text-white hover:bg-green-800"
-                  }`}
-                >
-                  {loading ? "Sending..." : "Send OTP"}
-                </button>
-              </div>
-            </div>
-
-            {/* Official Phone */}
-            {/* Official Phone */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-2">
-                Official Phone
-              </label>
-
-              <div className="flex gap-2">
-                <input
-                  type="tel"
-                  inputMode="numeric"
-                  value={officialPhone}
-                  onChange={(e) => {
-                    const value = e.target.value
-                      .replace(/\D/g, "")
-                      .slice(0, 10);
-
-                    setOfficialPhone(value);
-                    setPhoneVerified(false);
-                    setPhoneOtpSent(false);
-                    setPhoneOtp("");
-                    setMessage("");
-                    setError("");
-                  }}
-                  placeholder="Enter 10-digit phone no."
-                  disabled={phoneVerified}
-                  className="flex-1 px-3 py-2.5 rounded-lg border border-gray-300 focus:border-green-900 focus:ring-1 focus:ring-green-900 outline-none text-sm disabled:bg-gray-100"
-                />
-
-                <button
-                  type="button"
-                  onClick={handleSendPhoneOTP}
-                  disabled={
-                    loading || !/^\d{10}$/.test(officialPhone) || phoneVerified
-                  }
-                  className={`px-4 py-2.5 rounded-lg text-sm font-medium ${
-                    loading || !/^\d{10}$/.test(officialPhone) || phoneVerified
-                      ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                      : "bg-green-900 text-white hover:bg-green-800"
-                  }`}
-                >
-                  {loading ? "Sending..." : "Send OTP"}
-                </button>
-              </div>
-            </div>
-          </div>
-
-          {/* OTP Section */}
-          {otpSent && !emailVerified && (
-            <div className="mt-6 p-4 rounded-xl border border-green-200 bg-green-50">
-              <label className="block text-xs font-semibold text-gray-700 mb-2">
-                Enter 6-Digit OTP
-              </label>
-
-              <div className="flex gap-3">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={otp}
-                  onChange={(e) => setOtp(e.target.value.replace(/\D/g, ""))}
-                  placeholder="Enter OTP"
-                  className="w-48 px-3 py-2.5 rounded-lg border border-gray-300 focus:border-green-900 focus:ring-1 focus:ring-green-900 outline-none text-sm tracking-widest"
-                />
-
-                <button
-                  type="button"
-                  onClick={handleVerifyOTP}
-                  disabled={loading || otp.length !== 6}
-                  className={`px-5 py-2.5 rounded-lg text-sm font-medium ${
-                    loading || otp.length !== 6
-                      ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                      : "bg-green-900 text-white hover:bg-green-800"
-                  }`}
-                >
-                  {loading ? "Verifying..." : "Verify OTP"}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Verification Status */}
-          {emailVerified && (
-            <div className="mt-6 p-4 rounded-xl border border-green-200 bg-green-50">
-              <div className="flex items-center gap-2 text-green-800 text-sm font-medium">
-                <span className="text-lg">✓</span>
-                Email verified successfully
-              </div>
-            </div>
-          )}
-
-          {/* Phone OTP Section */}
-          {phoneOtpSent && !phoneVerified && (
-            <div className="mt-6 p-4 rounded-xl border border-green-200 bg-green-50">
-              <label className="block text-xs font-semibold text-gray-700 mb-2">
-                Enter 6-Digit Phone OTP
-              </label>
-
-              <div className="flex gap-3">
-                <input
-                  type="text"
-                  inputMode="numeric"
-                  maxLength={6}
-                  value={phoneOtp}
-                  onChange={(e) =>
-                    setPhoneOtp(e.target.value.replace(/\D/g, ""))
-                  }
-                  placeholder="Enter OTP"
-                  className="w-48 px-3 py-2.5 rounded-lg border border-gray-300 focus:border-green-900 focus:ring-1 focus:ring-green-900 outline-none text-sm tracking-widest"
-                />
-
-                <button
-                  type="button"
-                  onClick={handleVerifyPhoneOTP}
-                  disabled={loading || phoneOtp.length !== 6}
-                  className={`px-5 py-2.5 rounded-lg text-sm font-medium ${
-                    loading || phoneOtp.length !== 6
-                      ? "bg-gray-200 text-gray-400 cursor-not-allowed"
-                      : "bg-green-900 text-white hover:bg-green-800"
-                  }`}
-                >
-                  {loading ? "Verifying..." : "Verify OTP"}
-                </button>
-              </div>
-            </div>
-          )}
-
-          {/* Phone Verification Status */}
-          {phoneVerified && (
-            <div className="mt-6 p-4 rounded-xl border border-green-200 bg-green-50">
-              <div className="flex items-center gap-2 text-green-800 text-sm font-medium">
-                <span className="text-lg">✓</span>
-                Phone number verified successfully
-              </div>
-            </div>
-          )}
-
-          {/* Messages */}
-          {message && <p className="mt-4 text-sm text-green-700">{message}</p>}
-
-          {error && <p className="mt-4 text-sm text-red-600">{error}</p>}
-
-          {/* Buttons */}
-          <div className="flex justify-end gap-3 mt-7">
-            <button
-              type="button"
-              onClick={() => navigate("/register/step1")}
-              className="px-5 py-2.5 rounded-lg border border-gray-400 bg-white text-gray-800 text-sm font-medium hover:bg-gray-100 transition"
-            >
-              ← Back
-            </button>
-
-            <button
-              type="button"
-              onClick={handleContinue}
-              disabled={!isStep2Complete}
-              className={`px-5 py-2.5 rounded-lg text-sm font-medium transition ${
-                isStep2Complete
-                  ? "bg-green-900 text-white hover:bg-green-800"
-                  : "bg-gray-200 text-gray-400 cursor-not-allowed"
-              }`}
-            >
-              Continue →
-            </button>
-          </div>
+        <div className="flex h-[30px] items-center gap-1.5 rounded-full bg-green-100 px-3 text-14px font-medium text-green-700">
+          <ShieldCheck size={13} />
+          Session Encrypted
         </div>
+      </header>
+
+      {/* ================= BODY ================= */}
+
+      <div className="flex min-h-[calc(100vh-62px)] w-full">
+
+        {/* ================= LEFT PANEL ================= */}
+
+        <aside className="relative hidden w-[255px] shrink-0 overflow-hidden border-r border-[#dce6f0] bg-gradient-to-b from-[#f5faff] via-[#f1f8ff] to-[#eef8ff] lg:block">
+
+          {/* LEFT TEXT */}
+          <div className="relative z-10 px-[32px] pt-[70px]">
+            <div className="mb-4 flex h-[31px] w-[31px] items-center justify-center rounded-full bg-[#0b3b78] text-white">
+              <Scale size={17} strokeWidth={2} />
+            </div>
+
+            <p className="text-14px font-semibold leading-tight text-[#113d6d]">
+              Create Your
+            </p>
+
+            <h2 className="mt-[2px] text-[22px] font-bold leading-[1.02] text-[#1474e4]">
+              Official Account
+            </h2>
+
+            <p className="mt-3 max-w-[175px] text-xs leading-[1.4] text-[#596f87]">
+              Provide your legal information exactly as it appears on official
+              documents.
+            </p>
+          </div>
+
+          {/* TRICOLOR / COURTHOUSE */}
+          <img
+            src="/sidebar-tricolor.png"
+            alt=""
+            className="absolute bottom-[82px] left-0 w-full object-contain"
+          />
+
+          {/* LEFT FOOTER */}
+          <div className="absolute bottom-[20px] left-[28px] right-[28px]">
+
+            <div className="mb-4 flex items-center justify-between">
+              <div className="h-[2px] w-[42%] rounded-full bg-[#43A96B]" />
+              <div className="h-[2px] w-[42%] rounded-full bg-[#F57C00]" />
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-[#0B3B78] text-white">
+                <Scale size={16} />
+              </div>
+
+              <div>
+                <p className="text-xs font-semibold leading-4 text-[#073B7A]">
+                  Justice. Integrity. Service.
+                </p>
+
+                <p className="text-[10px] leading-4 text-[#4D6FA3]">
+                  Protected · Confidential · Trusted
+                </p>
+              </div>
+            </div>
+          </div>
+        </aside>
+
+        {/* ================= RIGHT SIDE ================= */}
+
+        <main className="flex min-w-0 flex-1 items-start justify-center p-4 lg:px-6 lg:py-4">
+
+          <div className="w-full max-w-[980px] overflow-hidden rounded-[9px] border border-[#c9d5e2] bg-white shadow-sm">
+
+            {/* ================= STEPPER ================= */}
+
+            <div className="border-b border-[#dce4ed] px-7 py-3">
+              <div className="flex items-start">
+
+                {/* STEP 1 */}
+                <div className="flex min-w-[105px] flex-col items-center">
+                  <div className="flex h-[23px] w-[23px] items-center justify-center rounded-full bg-[#1477e5] text-[12px] font-semibold text-white">
+                    1
+                  </div>
+
+                  <span className="mt-1 text-[12px] font-medium text-[#176bc7]">
+                    Basic Information
+                  </span>
+                </div>
+
+                <div className="mt-[11px] h-px flex-1 bg-[#70aef0]" />
+
+                {/* STEP 2 */}
+                <div className="flex min-w-[115px] flex-col items-center">
+                  <div className="flex h-[23px] w-[23px] items-center justify-center rounded-full bg-[#1477e5] text-[12px] font-semibold text-white">
+                    2
+                  </div>
+
+                  <span className="mt-1 text-[12px] font-medium text-[#176bc7]">
+                    Official Information
+                  </span>
+                </div>
+
+                <div className="mt-[11px] h-px flex-1 bg-[#c5ced8]" />
+
+                {/* STEP 3 */}
+                <div className="flex min-w-[100px] flex-col items-center">
+                  <div className="flex h-[23px] w-[23px] items-center justify-center rounded-full bg-[#f0f1f2] text-[12px] font-medium text-[#656d77]">
+                    3
+                  </div>
+
+                  <span className="mt-1 text-[12px] text-[#727b85]">
+                    Identity Proof
+                  </span>
+                </div>
+              </div>
+            </div>
+
+            {/* ================= FORM ================= */}
+
+            <form onSubmit={handleContinue}>
+              <section className="px-7 py-5">
+
+                {/* ROW 1 */}
+                <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+
+                  <div>
+                    <label className="mb-1 block text-14px font-semibold text-slate-800">
+                      Department / Agency Name
+                    </label>
+
+                    <input
+                      type="text"
+                      name="department"
+                      value={formData.department}
+                      onChange={handleChange}
+                      placeholder="e.g. Federal Bureau of Investigation"
+                      required
+                      className="h-[36px] w-full rounded-[5px] border border-slate-300 bg-white px-3 text-sm outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-14px font-semibold text-slate-800">
+                      Designation / Rank
+                    </label>
+
+                    <input
+                      type="text"
+                      name="designation"
+                      value={formData.designation}
+                      onChange={handleChange}
+                      placeholder="e.g. Special Agent"
+                      required
+                      className="h-[36px] w-full rounded-[5px] border border-slate-300 bg-white px-3 text-sm outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* ROW 2 */}
+                <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+
+                  <div>
+                    <label className="mb-1 block text-14px font-semibold text-slate-800">
+                      Employee / Badge ID
+                    </label>
+
+                    <input
+                      type="text"
+                      name="employeeId"
+                      value={formData.employeeId}
+                      onChange={handleChange}
+                      placeholder="Enter official ID number"
+                      required
+                      className="h-[36px] w-full rounded-[5px] border border-slate-300 bg-white px-3 text-sm outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-14px font-semibold text-slate-800">
+                      Jurisdiction / Location
+                    </label>
+
+                    <div className="relative">
+                      <select
+                        name="jurisdiction"
+                        value={formData.jurisdiction}
+                        onChange={handleChange}
+                        required
+                        className="h-[36px] w-full appearance-none rounded-[5px] border border-slate-300 bg-white px-3 pr-8 text-sm text-slate-600 outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                      >
+                        <option value="">
+                          Select jurisdiction level
+                        </option>
+
+                        <option value="national">National</option>
+                        <option value="state">State</option>
+                        <option value="district">District</option>
+                        <option value="city">City</option>
+                        <option value="local">Local</option>
+                      </select>
+
+                      <ChevronDown className="pointer-events-none absolute right-3 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-slate-500" />
+                    </div>
+                  </div>
+                </div>
+
+                {/* ROW 3 */}
+                <div className="mb-3 grid grid-cols-1 gap-3 md:grid-cols-2">
+
+                  <div>
+                    <label className="mb-1 block text-14px font-semibold text-slate-800">
+                      Date of Joining
+                    </label>
+
+                    <input
+                      type="date"
+                      name="joiningDate"
+                      value={formData.joiningDate}
+                      onChange={handleChange}
+                      required
+                      className="h-[36px] w-full rounded-[5px] border border-slate-300 bg-white px-3 text-sm outline-none focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-14px font-semibold text-slate-800">
+                      Supervising Officer
+                    </label>
+
+                    <input
+                      type="text"
+                      name="supervisingOfficer"
+                      value={formData.supervisingOfficer}
+                      onChange={handleChange}
+                      placeholder="Name or Title"
+                      required
+                      className="h-[36px] w-full rounded-[5px] border border-slate-300 bg-white px-3 text-sm outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* ROW 4 */}
+                <div className="mb-5 grid grid-cols-1 gap-3 md:grid-cols-2">
+
+                  <div>
+                    <label className="mb-1 block text-14px font-semibold text-slate-800">
+                      Official Email
+                    </label>
+
+                    <input
+                      type="email"
+                      name="officialEmail"
+                      value={formData.officialEmail}
+                      onChange={handleChange}
+                      placeholder="Enter Email"
+                      required
+                      className="h-[36px] w-full rounded-[5px] border border-slate-300 bg-white px-3 text-sm outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-14px font-semibold text-slate-800">
+                      Official Phone
+                    </label>
+
+                    <input
+                      type="tel"
+                      name="officialPhone"
+                      value={formData.officialPhone}
+                      onChange={handleChange}
+                      placeholder="Enter Phone no."
+                      required
+                      className="h-[36px] w-full rounded-[5px] border border-slate-300 bg-white px-3 text-sm outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                    />
+                  </div>
+                </div>
+
+                {/* ================= BOTTOM ================= */}
+
+                <div className="flex flex-col gap-3 border-t border-slate-200 pt-4 sm:flex-row sm:items-center sm:justify-between">
+
+                  {/* SECURITY */}
+                  <div className="flex max-w-[430px] items-center gap-2 rounded-[4px] bg-blue-50 px-3 py-2 text-[12px] leading-[1.4] text-blue-700">
+                    <LockKeyhole className="h-4 w-4 shrink-0" />
+
+                    <span>
+                      Your information is encrypted and secured. It will only
+                      be used for official purposes and will not be shared
+                      without authorization.
+                    </span>
+                  </div>
+
+                  {/* BUTTONS */}
+                  <div className="flex shrink-0 items-center gap-2">
+
+                    <button
+                      type="button"
+                      onClick={() => navigate("/register/step1")}
+                      className="flex h-[34px] items-center gap-1.5 rounded-[5px] border border-slate-400 bg-white px-4 text-12px font-medium text-slate-700 transition hover:bg-slate-50"
+                    >
+                      <ArrowLeft size={13} />
+                      Back
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={!isComplete}
+                      className={`flex h-[34px] items-center gap-1.5 rounded-[5px] px-4 text-12px font-medium text-white transition ${
+                        isComplete
+                          ? "bg-[#0877eb] hover:bg-[#0068d6]"
+                          : "cursor-not-allowed bg-[#82b9ef]"
+                      }`}
+                    >
+                      Continue
+                      <ArrowRight size={13} />
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </form>
+          </div>
+        </main>
       </div>
     </div>
   );

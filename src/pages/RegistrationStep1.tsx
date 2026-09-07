@@ -1,12 +1,14 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
   Camera,
   Upload,
-  
   ChevronDown,
   ArrowLeft,
   ArrowRight,
+  ShieldCheck,
+  Scale,
+  LockKeyhole,
 } from "lucide-react";
 
 export default function RegistrationStep1() {
@@ -22,6 +24,25 @@ export default function RegistrationStep1() {
   });
 
   const [photo, setPhoto] = useState<File | null>(null);
+
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  const photoPreview = useMemo(() => {
+    if (!photo) return "";
+
+    return URL.createObjectURL(photo);
+  }, [photo]);
+
+  useEffect(() => {
+    return () => {
+      if (photoPreview) {
+        URL.revokeObjectURL(photoPreview);
+      }
+    };
+  }, [photoPreview]);
+
   const isStep1Complete =
     formData.fullName.trim() !== "" &&
     formData.dateOfBirth !== "" &&
@@ -32,281 +53,440 @@ export default function RegistrationStep1() {
     photo !== null;
 
   const handleChange = (
-    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>,
+    e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>
   ) => {
-    setFormData({
-      ...formData,
+    setFormData((previous) => ({
+      ...previous,
       [e.target.name]: e.target.value,
-    });
+    }));
   };
 
-  const handlePhotoUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (e.target.files && e.target.files[0]) {
-      setPhoto(e.target.files[0]);
+  const handlePhotoUpload = (
+    e: React.ChangeEvent<HTMLInputElement>
+  ) => {
+    const selectedFile = e.target.files?.[0];
+
+    if (!selectedFile) return;
+
+    // 5 MB maximum
+    if (selectedFile.size > 5 * 1024 * 1024) {
+      alert("Photo size must be 5MB or less.");
+      e.target.value = "";
+      return;
     }
+
+    setPhoto(selectedFile);
   };
 
   const handleContinue = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Save temporarily in browser.
-    // We will replace this with the backend later.
+    if (!isStep1Complete) return;
+
     sessionStorage.setItem(
       "registrationStep1",
       JSON.stringify({
         ...formData,
         photoName: photo?.name || "",
-      }),
+      })
     );
 
     navigate("/register/step2");
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-100 via-blue-100 to-amber-100 p-6 flex items-center justify-center">
-      <div className="w-full max-w-6xl bg-white rounded-3xl shadow-xl p-6 md:p-8">
-        {/* Header */}
-        <div className="mb-5">
-          <h1 className="text-3xl md:text-4xl font-bold text-green-900">
-            Create Official Account
-          </h1>
+    <div className="min-h-screen w-full bg-[#f5f9fd] text-slate-900">
 
-          <p className="text-sm text-gray-600 mt-1 max-w-md">
-            Please provide your legal information exactly as it appears on
-            official documents.
-          </p>
-        </div>
+      {/* ================= HEADER ================= */}
 
-        {/* Progress Steps */}
-        <div className="w-full max-w-md border border-gray-300 rounded-2xl p-3 mb-5">
-          <div className="flex items-center">
-            {/* Step 1 */}
-            <div className="flex flex-col items-center min-w-[75px]">
-              <div className="w-7 h-7 rounded-md bg-green-900 text-white flex items-center justify-center text-sm font-medium">
-                1
-              </div>
-              <span className="text-xs text-green-900 mt-1">Basic Info</span>
-            </div>
+      <header className="flex h-[62px] w-full items-center justify-between border-b border-[#dce6f0] bg-white px-5 lg:px-8">
 
-            <div className="h-px bg-gray-400 flex-1 mx-2 mb-5" />
+        <div className="flex items-center gap-2.5">
+          <img
+            src="/logo.jpg"
+            alt="National Emblem"
+            className="h-[48px] w-[48px] object-contain"
+          />
 
-            {/* Step 2 */}
-            <div className="flex flex-col items-center min-w-[75px]">
-              <div className="w-7 h-7 rounded-md bg-gray-200 text-gray-600 flex items-center justify-center text-sm font-medium">
-                2
-              </div>
-              <span className="text-xs text-gray-500 mt-1">Official Info</span>
-            </div>
+          <div>
+            <h1 className="text-[20px] font-bold leading-none tracking-[0.04em] text-[#123f70]">
+              JANMITRA
+            </h1>
 
-            <div className="h-px bg-gray-400 flex-1 mx-2 mb-5" />
-
-            {/* Step 3 */}
-            <div className="flex flex-col items-center min-w-[75px]">
-              <div className="w-7 h-7 rounded-md bg-gray-200 text-gray-600 flex items-center justify-center text-sm font-medium">
-                3
-              </div>
-              <span className="text-xs text-gray-500 mt-1">Evidence</span>
-            </div>
+            <p className="mt-1 text-[9px] leading-none text-[#6b7d91]">
+              Legal Investigation System
+            </p>
           </div>
         </div>
+<div className="flex h-[30px] items-center gap-1.5 rounded-full bg-green-100 px-3 text-sm font-medium text-green-700">
+          <ShieldCheck size={12} />
+          Session Encrypted
+        </div>
+      </header>
 
-        {/* Main Form */}
-        <form
-          onSubmit={handleContinue}
-          className="border border-gray-300 rounded-2xl p-5"
-        >
-          {/* Identification Photo */}
-          <div className="flex items-center gap-4 mb-5">
-            <div className="w-16 h-16 rounded-lg bg-gray-200 border border-gray-300 flex items-center justify-center">
-              {photo ? (
-                <img
-                  src={URL.createObjectURL(photo)}
-                  alt="Identification"
-                  className="w-full h-full object-cover rounded-lg"
-                />
-              ) : (
-                <Camera className="w-8 h-8 text-black" />
-              )}
+      {/* ================= MAIN PAGE ================= */}
+
+      <div className="flex min-h-[calc(100vh-62px)] w-full">
+
+        {/* ================= LEFT PANEL ================= */}
+
+        <aside className="relative hidden w-[255px] shrink-0 overflow-hidden border-r border-[#dce6f0] bg-gradient-to-b from-[#f5faff] via-[#f1f8ff] to-[#eef8ff] lg:block">
+
+          {/* LEFT TEXT */}
+          <div className="relative z-10 px-[32px] pt-[70px]">
+
+            <div className="mb-4 flex h-[31px] w-[31px] items-center justify-center rounded-full bg-[#e1efff] text-[#0758ba]">
+              <Scale size={17} strokeWidth={2} />
             </div>
 
-            <div>
-              <h2 className="font-semibold text-green-900">
-                Official Identification Photo
-              </h2>
+            <p className="text-[18px] font-semibold leading-tight text-[#113d6d]">
+              Create Your
+            </p>
 
-              <p className="text-xs text-gray-600">
-                Clear, front-facing photo against a plain background.
-              </p>
+            <h2 className="mt-[2px] text-[22px] font-bold leading-[1.02] text-[#1474e4]">
+              Official Account
+            </h2>
 
-              <label className="flex items-center gap-1 text-xs text-green-900 font-medium mt-1 cursor-pointer hover:underline">
-                <Upload className="w-3 h-3" />
-                {photo ? "Change Photo" : "Upload"}
-
-                <input
-                  type="file"
-                  accept="image/*"
-                  onChange={handlePhotoUpload}
-                  className="hidden"
-                />
-              </label>
-            </div>
+            <p className="mt-3 max-w-[175px] text-[12px] leading-[1.35] text-[#596f87]">
+              Provide your legal information exactly as it appears on official
+              documents.
+            </p>
           </div>
 
-          {/* Fields */}
-          <div className="space-y-4">
-            {/* Full Name */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Full Legal Name
-              </label>
+          {/* COURTHOUSE + TRICOLOR */}
+          <img
+            src="/sidebar-tricolor.png"
+            alt=""
+            className="absolute bottom-[78px] left-0 w-full object-contain"
+          />
 
-              <input
-                type="text"
-                name="fullName"
-                value={formData.fullName}
-                onChange={handleChange}
-                placeholder="First Middle Last"
-                required
-                className="w-full h-10 px-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-700 focus:border-green-700 text-sm"
+          {/* LEFT FOOTER */}
+          <div className="absolute bottom-[18px] left-[26px] right-[26px]">
+
+            <div className="mb-3 flex items-center gap-8">
+              <div className="h-px flex-1 bg-green-600" />
+              <div className="h-px flex-1 bg-orange-500" />
+            </div>
+
+            <div className="flex items-start gap-2 text-[12px] font-medium leading-[1.45] text-[#3e5875]">
+              <ShieldCheck
+                size={12}
+                className="mt-[1px] shrink-0 text-[#174f8e]"
               />
+
+              <div>
+  <p className="text-sm font-semibold leading-5 text-[#073B7A]">
+    Justice. Integrity. Service.
+  </p>
+
+  <p className="text-xs font-normal leading-5 text-[#4D6FA3]">
+    Protected · Confidential · Trusted
+  </p>
+</div>
+            </div>
+          </div>
+        </aside>
+
+        {/* ================= RIGHT SIDE ================= */}
+
+        <main className="flex min-w-0 flex-1 items-start justify-center p-4 lg:px-6 lg:py-4">
+
+          <div className="w-full max-w-[980px] overflow-hidden rounded-[9px] border border-[#c9d5e2] bg-white shadow-sm">
+
+            {/* ================= STEPPER ================= */}
+
+            <div className="border-b border-[#dce4ed] px-7 py-3">
+
+              <div className="flex items-start">
+
+                {/* STEP 1 */}
+                <div className="flex min-w-[105px] flex-col items-center">
+
+                  <div className="flex h-[23px] w-[23px] items-center justify-center rounded-full bg-[#1477e5] text-[15px] font-semibold text-white">
+                    1
+                  </div>
+
+                  <span className="mt-1 text-[12px] font-medium text-[#176bc7]">
+                    Basic Information
+                  </span>
+                </div>
+
+                <div className="mt-[11px] h-px flex-1 bg-[#c5ced8]" />
+
+                {/* STEP 2 */}
+                <div className="flex min-w-[115px] flex-col items-center">
+
+                  <div className="flex h-[23px] w-[23px] items-center justify-center rounded-full bg-[#f0f1f2] text-[15px] font-medium text-[#656d77]">
+                    2
+                  </div>
+
+                  <span className="mt-1 text-[12px] text-[#727b85]">
+                    Official Information
+                  </span>
+                </div>
+
+                <div className="mt-[11px] h-px flex-1 bg-[#c5ced8]" />
+
+                {/* STEP 3 */}
+                <div className="flex min-w-[100px] flex-col items-center">
+
+                  <div className="flex h-[23px] w-[23px] items-center justify-center rounded-full bg-[#f0f1f2] text-[15px] font-medium text-[#656d77]">
+                    3
+                  </div>
+
+                  <span className="mt-1 text-[12px] text-[#727b85]">
+                    Identity Proof
+                  </span>
+                </div>
+              </div>
             </div>
 
-            {/* DOB + Gender */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Date of Birth
-                </label>
+            <form onSubmit={handleContinue}>
 
-                <div className="relative">
+              {/* ================= PHOTO ================= */}
+
+              <section className="border-b border-[#dce4ed] px-7 py-5">
+
+                <div className="flex items-center gap-4">
+
+                  <label className="relative flex h-[105px] w-[105px] shrink-0 cursor-pointer items-center justify-center overflow-hidden rounded-[7px] border border-dashed border-[#a9c9ef] bg-[#f7fbff]">
+
+                    {photoPreview ? (
+                      <img
+                        src={photoPreview}
+                        alt="Official identification"
+                        className="h-full w-full object-cover"
+                      />
+                    ) : (
+                      <div className="flex h-[45px] w-[45px] items-center justify-center rounded-full bg-[#e1efff] text-[#0873e9]">
+                        <Camera size={22} strokeWidth={1.8} />
+                      </div>
+                    )}
+
+                    <input
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handlePhotoUpload}
+                      className="hidden"
+                    />
+                  </label>
+
+                  <div>
+
+                    <h2 className="text-[15px] font-semibold leading-tight text-[#101827]">
+                      Official Identification Photo
+                    </h2>
+
+                    <p className="mt-1 text-[12px] text-[#596b7e]">
+                      Clear, front-facing photo against a plain background.
+                    </p>
+
+                    <p className="mt-1.5 text-[10px] text-[#8a98a8]">
+                      JPG, PNG or WEBP · Max size 5MB
+                    </p>
+
+                    <label className="mt-2.5 inline-flex h-[27px] cursor-pointer items-center gap-1.5 rounded-[4px] border border-[#a9cef7] bg-[#f3f9ff] px-2.5 text-[14px] font-medium text-[#086de1] transition hover:bg-[#eaf5ff]">
+
+                      <Upload size={11} />
+
+                      {photo ? "Change Photo" : "Upload Photo"}
+
+                      <input
+                        type="file"
+                        accept="image/jpeg,image/png,image/webp"
+                        onChange={handlePhotoUpload}
+                        className="hidden"
+                      />
+                    </label>
+                  </div>
+                </div>
+              </section>
+
+              {/* ================= FORM FIELDS ================= */}
+
+              <section className="px-7 py-4">
+
+                {/* FULL NAME */}
+                <div className="mb-2.5">
+
+                  <label className="mb-1 block text-[14px] font-semibold text-[#1c2835]">
+                    Full Legal Name
+                  </label>
+
                   <input
-                    type="date"
-                    name="dateOfBirth"
-                    value={formData.dateOfBirth}
+                    type="text"
+                    name="fullName"
+                    value={formData.fullName}
                     onChange={handleChange}
+                    placeholder="First Middle Last"
                     required
-                    className="w-full h-10 px-3 pr-10 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-700 text-sm"
+                    className="h-[31px] w-full rounded-[5px] border border-[#c7d0db] bg-white px-2.5 text-[12px] text-slate-800 outline-none placeholder:text-[#8f9bad] focus:border-[#2781df] focus:ring-1 focus:ring-[#2781df]"
                   />
-
-                  {/* <Calendar className="absolute right-3 top-2.5 w-4 h-4 text-gray-600 pointer-events-none" /> */}
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Legal Gender
-                </label>
+                {/* DOB / GENDER */}
+                <div className="mb-2.5 grid grid-cols-1 gap-2 md:grid-cols-2">
 
-                <div className="relative">
-                  <select
-                    name="gender"
-                    value={formData.gender}
-                    onChange={handleChange}
-                    required
-                    className="appearance-none w-full h-10 px-3 pr-10 rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-green-700 text-sm text-gray-600"
-                  >
-                    <option value="">Select gender...</option>
-                    <option value="male">Male</option>
-                    <option value="female">Female</option>
-                    <option value="other">Other</option>
-                  </select>
+                  <div>
+                    <label className="mb-1 block text-[14px] font-semibold text-[#1c2835]">
+                      Date of Birth
+                    </label>
 
-                  <ChevronDown className="absolute right-3 top-2.5 w-4 h-4 text-gray-700 pointer-events-none" />
+                    <input
+                      type="date"
+                      name="dateOfBirth"
+                      value={formData.dateOfBirth}
+                      onChange={handleChange}
+                      required
+                      className="h-[31px] w-full rounded-[5px] border border-[#c7d0db] bg-white px-2.5 text-[12px] text-slate-800 outline-none focus:border-[#2781df] focus:ring-1 focus:ring-[#2781df]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[14px] font-semibold text-[#1c2835]">
+                      Legal Gender
+                    </label>
+
+                    <div className="relative">
+
+                      <select
+                        name="gender"
+                        value={formData.gender}
+                        onChange={handleChange}
+                        required
+                        className="h-[31px] w-full appearance-none rounded-[5px] border border-[#c7d0db] bg-white px-2.5 pr-7 text-[12px] text-[#566474] outline-none focus:border-[#2781df] focus:ring-1 focus:ring-[#2781df]"
+                      >
+                        <option value="">Select gender...</option>
+                        <option value="male">Male</option>
+                        <option value="female">Female</option>
+                        <option value="other">Other</option>
+                      </select>
+
+                      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-[#536170]" />
+                    </div>
+                  </div>
                 </div>
-              </div>
-            </div>
 
-            {/* Govt ID */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Govt ID Type
-                </label>
+                {/* GOVT ID */}
+                <div className="mb-2.5 grid grid-cols-1 gap-2 md:grid-cols-2">
 
-                <div className="relative">
-                  <select
-                    name="govIdType"
-                    value={formData.govIdType}
-                    onChange={handleChange}
-                    required
-                    className="appearance-none w-full h-10 px-3 pr-10 rounded-lg border border-gray-300 bg-white focus:outline-none focus:ring-2 focus:ring-green-700 text-sm text-gray-600"
-                  >
-                    <option value="">Select ID Type...</option>
-                    <option value="aadhaar">Aadhaar</option>
-                    <option value="pan">PAN</option>
-                    <option value="passport">Passport</option>
-                    <option value="driving-license">Driving License</option>
-                    <option value="voter-id">Voter ID</option>
-                  </select>
+                  <div>
+                    <label className="mb-1 block text-[14px] font-semibold text-[#1c2835]">
+                      Govt ID Type
+                    </label>
 
-                  <ChevronDown className="absolute right-3 top-2.5 w-4 h-4 text-gray-700 pointer-events-none" />
+                    <div className="relative">
+
+                      <select
+                        name="govIdType"
+                        value={formData.govIdType}
+                        onChange={handleChange}
+                        required
+                        className="h-[31px] w-full appearance-none rounded-[5px] border border-[#c7d0db] bg-white px-2.5 pr-7 text-[12px] text-[#566474] outline-none focus:border-[#2781df] focus:ring-1 focus:ring-[#2781df]"
+                      >
+                        <option value="">Select ID Type...</option>
+                        <option value="aadhaar">Aadhaar</option>
+                        <option value="pan">PAN</option>
+                        <option value="passport">Passport</option>
+                        <option value="driving-license">
+                          Driving License
+                        </option>
+                        <option value="voter-id">Voter ID</option>
+                      </select>
+
+                      <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-[#536170]" />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="mb-1 block text-[14px] font-semibold text-[#1c2835]">
+                      Govt ID Number
+                    </label>
+
+                    <input
+                      type="text"
+                      name="govIdNumber"
+                      value={formData.govIdNumber}
+                      onChange={handleChange}
+                      placeholder="ID number"
+                      required
+                      className="h-[31px] w-full rounded-[5px] border border-[#c7d0db] bg-white px-2.5 text-[12px] text-slate-800 outline-none placeholder:text-[#8f9bad] focus:border-[#2781df] focus:ring-1 focus:ring-[#2781df]"
+                    />
+                  </div>
                 </div>
-              </div>
 
-              <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Govt ID Number
-                </label>
+                {/* ADDRESS */}
+                <div className="mb-3">
 
-                <input
-                  type="text"
-                  name="govIdNumber"
-                  value={formData.govIdNumber}
-                  onChange={handleChange}
-                  placeholder="ID number"
-                  required
-                  className="w-full h-10 px-3 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-700 text-sm"
-                />
-              </div>
-            </div>
+                  <label className="mb-1 block text-[14px] font-semibold text-[#1c2835]">
+                    Primary Residential Address
+                  </label>
 
-            {/* Address */}
-            <div>
-              <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Primary Residential Address
-              </label>
+                  <div className="relative">
 
-              <div className="relative">
-                <input
-                  type="text"
-                  name="address"
-                  value={formData.address}
-                  onChange={handleChange}
-                  placeholder="Street Address, City, State/Province, Postal Code"
-                  required
-                  className="w-full h-10 px-3 pr-10 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-green-700 text-sm"
-                />
+                    <input
+                      type="text"
+                      name="address"
+                      value={formData.address}
+                      onChange={handleChange}
+                      placeholder="Street Address, City, State/Province, Postal Code"
+                      required
+                      className="h-[31px] w-full rounded-[5px] border border-[#c7d0db] bg-white px-2.5 pr-7 text-[12px] text-slate-800 outline-none placeholder:text-[#8f9bad] focus:border-[#2781df] focus:ring-1 focus:ring-[#2781df]"
+                    />
 
-                {/* <ChevronDown className="absolute right-3 top-2.5 w-4 h-4 text-gray-700" /> */}
-              </div>
-            </div>
+                    <ChevronDown className="pointer-events-none absolute right-2.5 top-1/2 h-3 w-3 -translate-y-1/2 text-[#536170]" />
+                  </div>
+                </div>
+
+                {/* ================= FOOTER ================= */}
+
+                <div className="flex flex-col gap-3 border-t border-[#e5eaf0] pt-3 sm:flex-row sm:items-center sm:justify-between">
+
+                  {/* SECURITY */}
+                  <div className="flex max-w-[380px] items-center gap-2 rounded-[4px] bg-[#eef6ff] px-2.5 py-2 text-[10px] leading-[1.4] text-[#0868d7]">
+
+                    <LockKeyhole
+                      size={20}
+                      className="shrink-0"
+                    />
+
+                    <span>
+                      Your information is encrypted and secured. It will only
+                      be used for official purposes and will not be shared
+                      without authorization.
+                    </span>
+                  </div>
+
+                  {/* BUTTONS */}
+                  <div className="flex shrink-0 items-center justify-end gap-2">
+
+                    <button
+                      type="button"
+                      onClick={() => navigate("/")}
+                      className="flex h-[30px] items-center gap-1.5 rounded-[5px] border border-[#8794a3] bg-white px-3.5 text-[14px] font-medium text-[#283544] transition hover:bg-slate-50"
+                    >
+                      <ArrowLeft size={11} />
+                      Return to login
+                    </button>
+
+                    <button
+                      type="submit"
+                      disabled={!isStep1Complete}
+                      className={`flex h-[30px] items-center gap-1.5 rounded-[5px] px-3.5 text-[14px] font-medium text-white transition ${
+                        isStep1Complete
+                          ? "bg-[#0877eb] hover:bg-[#0068d6]"
+                          : "cursor-not-allowed bg-[#82b9ef]"
+                      }`}
+                    >
+                      Continue
+                      <ArrowRight size={11} />
+                    </button>
+                  </div>
+                </div>
+              </section>
+            </form>
           </div>
-
-          {/* Buttons */}
-          <div className="flex justify-end gap-3 mt-7">
-            <button
-              type="button"
-              onClick={() => navigate("/")}
-              className="px-5 py-2 rounded-lg border border-gray-400 bg-white text-gray-800 text-sm font-medium hover:bg-gray-50 transition flex items-center gap-2"
-            >
-              <ArrowLeft className="w-4 h-4" />
-              Return to login
-            </button>
-
-            <button
-              type="submit"
-              disabled={!isStep1Complete}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition flex items-center gap-2 ${
-                isStep1Complete
-                  ? "bg-green-900 text-white hover:bg-green-800"
-                  : "bg-gray-200 text-gray-400 cursor-not-allowed"
-              }`}
-            >
-              Continue
-              <ArrowRight className="w-4 h-4" />
-            </button>
-          </div>
-        </form>
+        </main>
       </div>
     </div>
   );
