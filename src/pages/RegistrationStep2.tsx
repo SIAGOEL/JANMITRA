@@ -30,7 +30,8 @@ export default function RegistrationStep2() {
   const [message, setMessage] = useState("");
   const [error, setError] = useState("");
 
-  // Continue is enabled ONLY when everything is complete
+  // Continue is enabled when all required fields are complete.
+  // Email and phone OTP verification are temporarily disabled.
   const isStep2Complete =
     department.trim() !== "" &&
     designation.trim() !== "" &&
@@ -39,9 +40,17 @@ export default function RegistrationStep2() {
     dateOfJoining !== "" &&
     supervisingOfficer.trim() !== "" &&
     officialEmail.trim() !== "" &&
-    officialPhone.trim() !== "" &&
-    emailVerified &&
-    phoneVerified;
+  // Continue is enabled when all required fields are complete.
+  // Email and phone OTP verification are temporarily disabled.
+  const isStep2Complete =
+    department.trim() !== "" &&
+    designation.trim() !== "" &&
+    employeeId.trim() !== "" &&
+    jurisdiction !== "" &&
+    dateOfJoining !== "" &&
+    supervisingOfficer.trim() !== "" &&
+    officialEmail.trim() !== "" &&
+    officialPhone.trim() !== "";
 
   // Send OTP
   const handleSendOTP = async () => {
@@ -208,7 +217,7 @@ export default function RegistrationStep2() {
   // Continue to Step 3
   const handleContinue = () => {
     if (!isStep2Complete) {
-      setError("Please complete all required fields and verify your email.");
+      setError("Please complete all required fields.");
       return;
     }
 

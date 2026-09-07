@@ -24,12 +24,21 @@ async function createAuditLog(req, type, text) {
   }
 }
 
-// GET /api/cases   (optional query: ?search=&status=)
-// Returns a raw array to match the frontend's getCases() return shape.
+// GET /api/cases
+// Optional query: ?search=&status=
 async function listCases(req, res, next) {
   try {
     const { search, status } = req.query;
     const filter = {};
+
+    // Admin and Senior Officer can see all cases.
+    // Other roles can only see cases they created.
+    if (
+      req.user.role !== 'Admin' &&
+      req.user.role !== 'Senior Officer'
+    ) {
+      filter.createdBy = req.user._id;
+    }
 
     if (status && status !== 'All Status') {
       filter.status = status;
@@ -42,7 +51,9 @@ async function listCases(req, res, next) {
       ];
     }
 
-    const cases = await Case.find(filter).sort({ createdAt: -1 });
+    const cases = await Case.find(filter).sort({
+      createdAt: -1,
+    });
 
     res.json(cases.map((c) => c.toJSON()));
   } catch (err) {
@@ -51,7 +62,6 @@ async function listCases(req, res, next) {
 }
 
 // GET /api/cases/:id
-// (:id is the FIR/complaint string, e.g. FIR-2023-089)
 async function getCase(req, res, next) {
   try {
     const found = await Case.findOne({
@@ -62,6 +72,26 @@ async function getCase(req, res, next) {
       throw new ApiError(404, 'Case not found');
     }
 
+    // Admin and Senior Officer can access every case.
+    // Other roles can only access cases they created.
+    if (
+      req.user.role !== 'Admin' &&
+      req.user.role !== 'Senior Officer' &&
+      String(found.createdBy) !== String(req.user._id)
+    ) {
+      throw new ApiError(
+        403,
+        'You do not have permission to access this case'
+      );
+    }
+
+    // Record case view in audit trail.
+    await createAuditLog(
+      req,
+      'review',
+      `Case ${req.params.id} was viewed`
+    );
+
     res.json(found.toJSON());
   } catch (err) {
     next(err);
@@ -69,12 +99,11 @@ async function getCase(req, res, next) {
 }
 
 // POST /api/cases
-// Submits a completed registration - the assembled draft
 async function createCase(req, res, next) {
   try {
     const b = req.body || {};
 
-    // Generate a unique, human-readable case id.
+    // Generate a unique, human-readable case ID.
     const prefix =
       b.prefix === 'CMP' || b.type === 'complaint'
         ? 'CMP'
@@ -83,7 +112,7 @@ async function createCase(req, res, next) {
     let seq = (await Case.countDocuments()) + 1;
     let caseId = generateCaseId(prefix, seq);
 
-    // Guard against collisions with seeded/edited ids.
+    // Guard against case ID collisions.
     while (await Case.exists({ caseId })) {
       seq += 1;
       caseId = generateCaseId(prefix, seq);
@@ -101,10 +130,12 @@ async function createCase(req, res, next) {
       date: formatDisplayDate(),
       people: Array.isArray(b.people) ? b.people : [],
       documents: Array.isArray(b.documents) ? b.documents : [],
-      createdBy: req.user ? req.user._id : undefined,
+
+      // Store who created the case.
+      createdBy: req.user._id,
     });
 
-    // Create audit entry.
+    // Record case creation in audit trail.
     await createAuditLog(
       req,
       'document',
@@ -118,7 +149,6 @@ async function createCase(req, res, next) {
 }
 
 // PATCH /api/cases/:id
-// e.g. "Update Status" / "Close Case" quick actions
 async function updateCase(req, res, next) {
   try {
     const allowed = [
@@ -135,18 +165,31 @@ async function updateCase(req, res, next) {
 
     const updates = {};
 
-    allowed.forEach((k) => {
-      if (k in req.body) {
-        updates[k] = req.body[k];
+    allowed.forEach((key) => {
+      if (key in req.body) {
+        updates[key] = req.body[key];
       }
     });
 
-    const existing = await Case.findOne({
+    const existingCase = await Case.findOne({
       caseId: req.params.id,
     });
 
-    if (!existing) {
+    if (!existingCase) {
       throw new ApiError(404, 'Case not found');
+    }
+
+    // Admin and Senior Officer can update any case.
+    // Other roles can only update cases they created.
+    if (
+      req.user.role !== 'Admin' &&
+      req.user.role !== 'Senior Officer' &&
+      String(existingCase.createdBy) !== String(req.user._id)
+    ) {
+      throw new ApiError(
+        403,
+        'You do not have permission to update this case'
+      );
     }
 
     const updated = await Case.findOneAndUpdate(
@@ -158,15 +201,19 @@ async function updateCase(req, res, next) {
       }
     );
 
-    // Status changes are recorded as review activity.
+    if (!updated) {
+      throw new ApiError(404, 'Case not found');
+    }
+
+    // Record status changes separately as review activity.
     if (
       updates.status !== undefined &&
-      updates.status !== existing.status
+      updates.status !== existingCase.status
     ) {
       await createAuditLog(
         req,
         'review',
-        `Case ${req.params.id} moved from ${existing.status} to ${updates.status}`
+        `Case ${req.params.id} moved from ${existingCase.status} to ${updates.status}`
       );
     } else {
       await createAuditLog(
@@ -185,13 +232,28 @@ async function updateCase(req, res, next) {
 // DELETE /api/cases/:id
 async function deleteCase(req, res, next) {
   try {
-    const deleted = await Case.findOneAndDelete({
+    const existingCase = await Case.findOne({
       caseId: req.params.id,
     });
 
-    if (!deleted) {
+    if (!existingCase) {
       throw new ApiError(404, 'Case not found');
     }
+
+    // Only Admin and Senior Officer can delete cases.
+    if (
+      req.user.role !== 'Admin' &&
+      req.user.role !== 'Senior Officer'
+    ) {
+      throw new ApiError(
+        403,
+        'You do not have permission to delete this case'
+      );
+    }
+
+    await Case.findOneAndDelete({
+      caseId: req.params.id,
+    });
 
     // Record deletion in audit trail.
     await createAuditLog(

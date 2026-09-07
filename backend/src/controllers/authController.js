@@ -1,6 +1,5 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
-const EmailOTP = require('../models/EmailOTP');
 const ApiError = require('../utils/ApiError');
 const Audit = require('../models/Audit');
 
@@ -15,24 +14,12 @@ function signToken(user) {
 }
 
 // POST /api/auth/register
+// Email OTP verification is temporarily disabled.
 async function register(req, res, next) {
   try {
     const { fullName, email, password } = req.body;
 
     const normalizedEmail = email.toLowerCase().trim();
-
-    // Make sure the email was actually verified.
-    const verifiedEmail = await EmailOTP.findOne({
-      email: normalizedEmail,
-      verified: true,
-    });
-
-    if (!verifiedEmail) {
-      throw new ApiError(
-        403,
-        'Email address must be verified before registration'
-      );
-    }
 
     // Check whether account already exists.
     const existing = await User.findOne({
@@ -52,11 +39,6 @@ async function register(req, res, next) {
       fullName: fullName.trim(),
       email: normalizedEmail,
       password,
-    });
-
-    // The verified OTP record is no longer needed.
-    await EmailOTP.deleteOne({
-      _id: verifiedEmail._id,
     });
 
     const token = signToken(user);
@@ -90,13 +72,20 @@ async function login(req, res, next) {
       );
     }
 
-const token = signToken(user);
+    const token = signToken(user);
 
-await Audit.create({
-  type: 'login',
-  text: `User ${user.fullName} logged in`,
-  accessedBy: user.fullName,
-});
+    // Record login in audit trail.
+    try {
+      await Audit.create({
+        type: 'login',
+        text: `User ${user.fullName} logged in`,
+        accessedBy: user.fullName,
+      });
+    } catch (auditError) {
+      // Audit failure should not prevent successful login.
+      console.error('Create audit log error:', auditError);
+    }
+
     res.json({
       success: true,
       token,

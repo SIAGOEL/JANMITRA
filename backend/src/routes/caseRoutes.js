@@ -10,17 +10,28 @@ const {
 const { CATEGORIES, STATUSES } = require('../models/Case');
 const validate = require('../middleware/validate');
 const { protect } = require('../middleware/auth');
+const { authorize } = require('../middleware/authorize');
 
 const router = express.Router();
 
 // All case routes require authentication.
 router.use(protect);
 
-router.get('/', listCases);
-router.get('/:id', getCase);
+router.get(
+  '/',
+  authorize('Admin', 'Senior Officer', 'Investigator', 'Clerk', 'Viewer'),
+  listCases
+);
+
+router.get(
+  '/:id',
+  authorize('Admin', 'Senior Officer', 'Investigator', 'Clerk', 'Viewer'),
+  getCase
+);
 
 router.post(
   '/',
+  authorize('Admin', 'Senior Officer', 'Investigator'),
   [
     body('title').trim().notEmpty().withMessage('Incident title is required'),
     body('category').optional().isIn(CATEGORIES).withMessage('Invalid category'),
@@ -32,6 +43,7 @@ router.post(
 
 router.patch(
   '/:id',
+  authorize('Admin', 'Senior Officer', 'Investigator'),
   [
     body('status').optional().isIn(STATUSES).withMessage('Invalid status'),
     body('category').optional().isIn(CATEGORIES).withMessage('Invalid category'),
@@ -40,6 +52,10 @@ router.patch(
   updateCase
 );
 
-router.delete('/:id', deleteCase);
+router.delete(
+  '/:id',
+  authorize('Admin', 'Senior Officer'),
+  deleteCase
+);
 
 module.exports = router;
