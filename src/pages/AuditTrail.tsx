@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
+import { getAuditLogs } from "../lib/api";
 
 type AuditType = "document" | "review" | "login" | "approval";
 
@@ -13,134 +14,6 @@ type AuditGroup = {
   date: string;
   items: AuditItem[];
 };
-
-const auditData: AuditGroup[] = [
-  {
-    date: "Today - Sunday, September 6, 2026",
-    items: [
-      {
-        time: "11:40 PM",
-        type: "document",
-        text: "New document uploaded in FIR-2023-089",
-        accessedBy: "Ronit Kapoor",
-      },
-      {
-        time: "11:35 PM",
-        type: "review",
-        text: "Case CMP-2023-112 moved to Under Review",
-        accessedBy: "Narendra Modi",
-      },
-      {
-        time: "11:30 PM",
-        type: "document",
-        text: "New document uploaded in FIR-2023-089",
-        accessedBy: "Vikram Sharma",
-      },
-      {
-        time: "11:25 PM",
-        type: "login",
-        text: "User Arsh Pratap Singh logged in",
-        accessedBy: "Neha Verma",
-      },
-      {
-        time: "10:35 PM",
-        type: "approval",
-        text: "Approval request for CMP-2023-089",
-        accessedBy: "Rahul Mehta",
-      },
-    ],
-  },
-
-  {
-    date: "Friday, September 4, 2026",
-    items: [
-      {
-        time: "11:40 PM",
-        type: "document",
-        text: "New document uploaded in FIR-2023-089",
-        accessedBy: "Priya Singh",
-      },
-      {
-        time: "11:35 PM",
-        type: "review",
-        text: "Case CMP-2023-112 moved to Under Review",
-        accessedBy: "Amit Kumar",
-      },
-      {
-        time: "11:30 PM",
-        type: "document",
-        text: "New document uploaded in FIR-2023-089",
-        accessedBy: "Ananya Sharma",
-      },
-      {
-        time: "11:25 PM",
-        type: "login",
-        text: "User Arsh Pratap Singh logged in",
-        accessedBy: "Sneha Kapoor",
-      },
-      {
-        time: "11:35 PM",
-        type: "review",
-        text: "Case CMP-2023-112 moved to Under Review",
-        accessedBy: "Harsh Vardhan",
-      },
-      {
-        time: "11:30 PM",
-        type: "document",
-        text: "New document uploaded in FIR-2023-089",
-        accessedBy: "Sia Goel",
-      },
-      {
-        time: "11:25 PM",
-        type: "login",
-        text: "User Arsh Pratap Singh logged in",
-        accessedBy: "Suraj Sharma",
-      },
-      {
-        time: "10:35 PM",
-        type: "approval",
-        text: "Approval request for CMP-2023-089",
-        accessedBy: "Manjeet Singh",
-      },
-    ],
-  },
-
-  {
-    date: "Wednesday, September 2, 2026",
-    items: [
-      {
-        time: "11:40 PM",
-        type: "document",
-        text: "New document uploaded in FIR-2023-089",
-        accessedBy: "Khushi Dalal",
-      },
-      {
-        time: "11:35 PM",
-        type: "review",
-        text: "Case CMP-2023-112 moved to Under Review",
-        accessedBy: "Sara Varun",
-      },
-      {
-        time: "11:30 PM",
-        type: "document",
-        text: "New document uploaded in FIR-2023-089",
-        accessedBy: "Kavya Reddy",
-      },
-      {
-        time: "11:25 PM",
-        type: "login",
-        text: "User Arsh Pratap Singh logged in",
-        accessedBy: "Arsh Pratap Singh",
-      },
-      {
-        time: "10:35 PM",
-        type: "approval",
-        text: "Approval request for CMP-2023-089",
-        accessedBy: "Pooja Mehta",
-      },
-    ],
-  },
-];
 
 function ActivityIcon({ type }: { type: AuditType }) {
   if (type === "document") {
@@ -215,84 +88,224 @@ function ActivityIcon({ type }: { type: AuditType }) {
 }
 
 export default function AuditTrail() {
+  const [auditData, setAuditData] = useState<AuditGroup[]>([]);
+
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState("All Status");
   const [dateRange, setDateRange] = useState("Last 30 days");
 
-  // Get the latest date available in our audit data.
-// We use this as the reference date so the demo filters work
-// correctly with the sample audit records.
-const latestAuditDate = new Date(2026, 8, 6);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
-const getDateForGroup = (dateText: string) => {
-  const datePart = dateText.includes(" - ")
-    ? dateText.split(" - ")[1]
-    : dateText;
+  // ================= FETCH AUDIT LOGS =================
 
-  return new Date(datePart);
-};
+  useEffect(() => {
+    const loadAuditLogs = async () => {
+      try {
+        setLoading(true);
+        setError("");
 
-const filteredGroups = auditData
-  .filter((group) => {
-    const groupDate = getDateForGroup(group.date);
+        const logs = await getAuditLogs();
 
-    if (dateRange === "Today") {
-      return (
-        groupDate.toDateString() === latestAuditDate.toDateString()
+        const grouped: Record<string, AuditItem[]> = {};
+
+        logs.forEach((log: any) => {
+          const logDate = new Date(log.time);
+
+          if (Number.isNaN(logDate.getTime())) {
+            return;
+          }
+
+          const dateKey = logDate.toDateString();
+
+          if (!grouped[dateKey]) {
+            grouped[dateKey] = [];
+          }
+
+          grouped[dateKey].push({
+            time: logDate.toLocaleTimeString([], {
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+
+            type: log.type as AuditType,
+
+            text: log.text,
+
+            accessedBy:
+              log.accessedBy ||
+              log.userName ||
+              log.user?.fullName ||
+              "Unknown",
+          });
+        });
+
+        const groups: AuditGroup[] = Object.entries(grouped)
+          .map(([date, items]) => ({
+            date,
+            items,
+          }))
+          .sort((a, b) => {
+            return (
+              new Date(b.date).getTime() -
+              new Date(a.date).getTime()
+            );
+          });
+
+        setAuditData(groups);
+      } catch (err: any) {
+        console.error("Failed to load audit logs:", err);
+
+        setError(
+          err?.message || "Failed to load audit activities."
+        );
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadAuditLogs();
+  }, []);
+
+  // ================= FILTER DATA =================
+
+  const latestAuditDate = useMemo(() => {
+    if (auditData.length === 0) {
+      return new Date();
+    }
+
+    const dates = auditData
+      .map((group) => new Date(group.date))
+      .filter(
+        (date) => !Number.isNaN(date.getTime())
       );
+
+    if (dates.length === 0) {
+      return new Date();
     }
 
-    if (dateRange === "Last 7 days") {
-      const sevenDaysAgo = new Date(latestAuditDate);
-      sevenDaysAgo.setDate(latestAuditDate.getDate() - 6);
+    return new Date(
+      Math.max(
+        ...dates.map((date) => date.getTime())
+      )
+    );
+  }, [auditData]);
 
-      return groupDate >= sevenDaysAgo && groupDate <= latestAuditDate;
-    }
+  const filteredGroups = useMemo(() => {
+    return auditData
+      .filter((group) => {
+        const groupDate = new Date(group.date);
 
-    if (dateRange === "Last 30 days") {
-      const thirtyDaysAgo = new Date(latestAuditDate);
-      thirtyDaysAgo.setDate(latestAuditDate.getDate() - 29);
+        if (dateRange === "Today") {
+          return (
+            groupDate.toDateString() ===
+            latestAuditDate.toDateString()
+          );
+        }
 
-      return groupDate >= thirtyDaysAgo && groupDate <= latestAuditDate;
-    }
+        if (dateRange === "Last 7 days") {
+          const sevenDaysAgo =
+            new Date(latestAuditDate);
 
-    if (dateRange === "This month") {
-      return (
-        groupDate.getMonth() === latestAuditDate.getMonth() &&
-        groupDate.getFullYear() === latestAuditDate.getFullYear()
+          sevenDaysAgo.setDate(
+            latestAuditDate.getDate() - 6
+          );
+
+          return (
+            groupDate >= sevenDaysAgo &&
+            groupDate <= latestAuditDate
+          );
+        }
+
+        if (dateRange === "Last 30 days") {
+          const thirtyDaysAgo =
+            new Date(latestAuditDate);
+
+          thirtyDaysAgo.setDate(
+            latestAuditDate.getDate() - 29
+          );
+
+          return (
+            groupDate >= thirtyDaysAgo &&
+            groupDate <= latestAuditDate
+          );
+        }
+
+        if (dateRange === "This month") {
+          return (
+            groupDate.getMonth() ===
+              latestAuditDate.getMonth() &&
+            groupDate.getFullYear() ===
+              latestAuditDate.getFullYear()
+          );
+        }
+
+        return true;
+      })
+      .map((group) => ({
+        ...group,
+
+        items: group.items
+          .filter((item) => {
+            const searchText =
+              search.trim().toLowerCase();
+
+            const matchesSearch =
+              searchText === "" ||
+              item.text
+                .toLowerCase()
+                .includes(searchText) ||
+              item.time
+                .toLowerCase()
+                .includes(searchText) ||
+              item.accessedBy
+                .toLowerCase()
+                .includes(searchText);
+
+            const matchesStatus =
+              status === "All Status" ||
+              (status === "Uploaded" &&
+                item.type === "document") ||
+              (status === "Under Review" &&
+                item.type === "review") ||
+              (status === "Logged In" &&
+                item.type === "login") ||
+              (status === "Approved" &&
+                item.type === "approval");
+
+            return (
+              matchesSearch &&
+              matchesStatus
+            );
+          })
+          .sort((a, b) => {
+            return (
+              new Date(
+                `1970-01-01 ${b.time}`
+              ).getTime() -
+              new Date(
+                `1970-01-01 ${a.time}`
+              ).getTime()
+            );
+          }),
+      }))
+      .filter(
+        (group) => group.items.length > 0
       );
-    }
+  }, [
+    auditData,
+    search,
+    status,
+    dateRange,
+    latestAuditDate,
+  ]);
 
-    return true;
-  })
-  .map((group) => ({
-    ...group,
-
-    items: group.items.filter((item) => {
-      const searchText = search.trim().toLowerCase();
-
-      const matchesSearch =
-        searchText === "" ||
-        item.text.toLowerCase().includes(searchText) ||
-        item.time.toLowerCase().includes(searchText) ||
-        item.accessedBy.toLowerCase().includes(searchText);
-
-      const matchesStatus =
-        status === "All Status" ||
-        (status === "Uploaded" && item.type === "document") ||
-        (status === "Under Review" && item.type === "review") ||
-        (status === "Logged In" && item.type === "login") ||
-        (status === "Approved" && item.type === "approval");
-
-      return matchesSearch && matchesStatus;
-    }),
-  }))
-  .filter((group) => group.items.length > 0);
+  // ================= UI =================
 
   return (
     <div className="min-h-full bg-[#f8fafc] px-7 py-6">
 
-      {/* ================= HEADER ================= */}
+      {/* HEADER */}
 
       <div className="mb-6 flex items-start justify-between">
         <div>
@@ -301,8 +314,8 @@ const filteredGroups = auditData
           </h1>
 
           <p className="mt-2 text-[15px] text-gray-500">
-            Manage, track, and review active First Information Reports and
-            Complaints.
+            Manage, track, and review active First
+            Information Reports and Complaints.
           </p>
         </div>
 
@@ -310,16 +323,19 @@ const filteredGroups = auditData
           type="button"
           className="flex h-11 items-center gap-2 rounded-md bg-blue-600 px-5 text-[14px] font-semibold text-white shadow-sm transition hover:bg-blue-700"
         >
-          <span className="text-[21px] leading-none">+</span>
+          <span className="text-[21px] leading-none">
+            +
+          </span>
+
           <span>File New Complaint</span>
         </button>
       </div>
 
-      {/* ================= SEARCH / FILTER ================= */}
+      {/* SEARCH / FILTER */}
 
       <div className="mb-6 flex min-h-[62px] items-center gap-3 rounded-lg border border-gray-300 bg-white px-4 shadow-sm">
 
-        {/* Search */}
+        {/* SEARCH */}
 
         <div className="relative flex-1">
           <svg
@@ -338,17 +354,21 @@ const filteredGroups = auditData
           <input
             type="text"
             value={search}
-            onChange={(e) => setSearch(e.target.value)}
+            onChange={(e) =>
+              setSearch(e.target.value)
+            }
             placeholder="Search by Case ID, FIR, Title..."
             className="h-10 w-full rounded-md border border-gray-200 bg-white pl-10 pr-3 text-[14px] text-gray-700 outline-none placeholder:text-gray-400 focus:border-blue-400"
           />
         </div>
 
-        {/* Status */}
+        {/* STATUS */}
 
         <select
           value={status}
-          onChange={(e) => setStatus(e.target.value)}
+          onChange={(e) =>
+            setStatus(e.target.value)
+          }
           className="h-10 w-[135px] rounded-md border border-gray-200 bg-white px-3 text-[14px] text-gray-600 outline-none focus:border-blue-400"
         >
           <option>All Status</option>
@@ -358,11 +378,13 @@ const filteredGroups = auditData
           <option>Logged In</option>
         </select>
 
-        {/* Date */}
+        {/* DATE */}
 
         <select
           value={dateRange}
-          onChange={(e) => setDateRange(e.target.value)}
+          onChange={(e) =>
+            setDateRange(e.target.value)
+          }
           className="h-10 w-[145px] rounded-md border border-gray-200 bg-white px-3 text-[14px] text-gray-600 outline-none focus:border-blue-400"
         >
           <option>Last 30 days</option>
@@ -371,7 +393,7 @@ const filteredGroups = auditData
           <option>This month</option>
         </select>
 
-        {/* Filter */}
+        {/* FILTER */}
 
         <button
           type="button"
@@ -393,122 +415,166 @@ const filteredGroups = auditData
         </button>
       </div>
 
-      {/* ================= AUDIT GROUPS ================= */}
+      {/* LOADING */}
 
-      <div className="space-y-5">
+      {loading && (
+        <div className="rounded-lg border border-gray-200 bg-white py-16 text-center shadow-sm">
+          <p className="text-sm text-gray-500">
+            Loading audit activities...
+          </p>
+        </div>
+      )}
 
-        {filteredGroups.map((group) => (
-          <section
-            key={group.date}
-            className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
-          >
+      {/* ERROR */}
 
-            {/* DATE */}
+      {!loading && error && (
+        <div className="rounded-lg border border-red-200 bg-white py-16 text-center shadow-sm">
+          <p className="text-lg font-medium text-red-600">
+            Failed to load audit activities
+          </p>
 
-            <div className="px-5 pb-3 pt-5">
-              <h2 className="text-[16px] font-semibold text-gray-800">
-                {group.date}
-              </h2>
-            </div>
+          <p className="mt-2 text-sm text-gray-400">
+            {error}
+          </p>
+        </div>
+      )}
 
-            {/* COLUMN HEADERS */}
+      {/* AUDIT GROUPS */}
 
-            <div className="flex items-center border-b border-gray-100 px-5 pb-2">
+      {!loading && !error && (
+        <div className="space-y-5">
 
-              <div className="w-[95px] shrink-0 text-[12px] font-semibold text-gray-500">
-                Time
+          {filteredGroups.map((group) => (
+            <section
+              key={group.date}
+              className="overflow-hidden rounded-lg border border-gray-200 bg-white shadow-sm"
+            >
+
+              {/* DATE */}
+
+              <div className="px-5 pb-3 pt-5">
+                <h2 className="text-[16px] font-semibold text-gray-800">
+                  {group.date}
+                </h2>
               </div>
 
-              <div className="flex-1 pl-[38px] text-[12px] font-semibold text-gray-500">
-                Activity
-              </div>
+              {/* COLUMN HEADERS */}
 
-              <div className="w-[220px] shrink-0 text-[12px] font-semibold text-gray-500">
-                Accessed By
-              </div>
+              <div className="flex items-center border-b border-gray-100 px-5 pb-2">
 
-              <div className="w-8 shrink-0" />
-            </div>
-
-            {/* ACTIVITY ITEMS */}
-
-            <div className="px-5 pb-4">
-
-              {group.items.map((item, index) => (
-                <div
-                  key={`${group.date}-${item.time}-${index}`}
-                  className="flex min-h-[50px] items-center"
-                >
-
-                  {/* TIME */}
-
-                  <div className="w-[95px] shrink-0 text-[14px] text-gray-600">
-                    {item.time}
-                  </div>
-
-                  {/* ACTIVITY */}
-
-                  <div className="flex flex-1 items-center">
-
-                    <div className="mr-4 flex w-[24px] shrink-0 items-center justify-center">
-                      <ActivityIcon type={item.type} />
-                    </div>
-
-                    <div className="text-[15px] font-medium text-gray-700">
-                      {item.text}
-                    </div>
-
-                  </div>
-
-                  {/* ACCESSED BY */}
-
-                  <div className="w-[220px] shrink-0 text-[14px] font-medium text-gray-700">
-                    {item.accessedBy}
-                  </div>
-
-                  {/* THREE DOTS */}
-
-                  <button
-                    type="button"
-                    title="More options"
-                    className="ml-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-100"
-                  >
-                    <svg
-                      width="18"
-                      height="18"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                    >
-                      <circle cx="12" cy="5" r="1.6" />
-                      <circle cx="12" cy="12" r="1.6" />
-                      <circle cx="12" cy="19" r="1.6" />
-                    </svg>
-                  </button>
-
+                <div className="w-[95px] shrink-0 text-[12px] font-semibold text-gray-500">
+                  Time
                 </div>
-              ))}
+
+                <div className="flex-1 pl-[38px] text-[12px] font-semibold text-gray-500">
+                  Activity
+                </div>
+
+                <div className="w-[220px] shrink-0 text-[12px] font-semibold text-gray-500">
+                  Accessed By
+                </div>
+
+                <div className="w-8 shrink-0" />
+
+              </div>
+
+              {/* ACTIVITY ITEMS */}
+
+              <div className="px-5 pb-4">
+
+                {group.items.map(
+                  (item, index) => (
+                    <div
+                      key={`${group.date}-${item.time}-${index}`}
+                      className="flex min-h-[50px] items-center"
+                    >
+
+                      {/* TIME */}
+
+                      <div className="w-[95px] shrink-0 text-[14px] text-gray-600">
+                        {item.time}
+                      </div>
+
+                      {/* ACTIVITY */}
+
+                      <div className="flex flex-1 items-center">
+
+                        <div className="mr-4 flex w-[24px] shrink-0 items-center justify-center">
+                          <ActivityIcon
+                            type={item.type}
+                          />
+                        </div>
+
+                        <div className="text-[15px] font-medium text-gray-700">
+                          {item.text}
+                        </div>
+
+                      </div>
+
+                      {/* ACCESSED BY */}
+
+                      <div className="w-[220px] shrink-0 text-[14px] font-medium text-gray-700">
+                        {item.accessedBy}
+                      </div>
+
+                      {/* THREE DOTS */}
+
+                      <button
+                        type="button"
+                        title="More options"
+                        className="ml-3 flex h-8 w-8 shrink-0 items-center justify-center rounded-md text-gray-500 transition hover:bg-gray-100"
+                      >
+                        <svg
+                          width="18"
+                          height="18"
+                          viewBox="0 0 24 24"
+                          fill="currentColor"
+                        >
+                          <circle
+                            cx="12"
+                            cy="5"
+                            r="1.6"
+                          />
+                          <circle
+                            cx="12"
+                            cy="12"
+                            r="1.6"
+                          />
+                          <circle
+                            cx="12"
+                            cy="19"
+                            r="1.6"
+                          />
+                        </svg>
+                      </button>
+
+                    </div>
+                  )
+                )}
+
+              </div>
+            </section>
+          ))}
+
+          {/* NO RESULTS */}
+
+          {filteredGroups.length === 0 && (
+            <div className="rounded-lg border border-gray-200 bg-white py-16 text-center shadow-sm">
+
+              <p className="text-lg font-medium text-gray-600">
+                No audit activities found
+              </p>
+
+              <p className="mt-2 text-sm text-gray-400">
+                Try changing your search or status filter.
+              </p>
 
             </div>
-          </section>
-        ))}
+          )}
 
-        {/* NO RESULTS */}
+        </div>
+      )}
 
-        {filteredGroups.length === 0 && (
-          <div className="rounded-lg border border-gray-200 bg-white py-16 text-center shadow-sm">
-
-            <p className="text-lg font-medium text-gray-600">
-              No audit activities found
-            </p>
-
-            <p className="mt-2 text-sm text-gray-400">
-              Try changing your search or status filter.
-            </p>
-
-          </div>
-        )}
-
-      </div>
     </div>
   );
 }

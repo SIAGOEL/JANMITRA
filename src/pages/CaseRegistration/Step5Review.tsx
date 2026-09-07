@@ -8,50 +8,120 @@ import {
   ArrowLeft,
   ArrowRight,
 } from 'lucide-react';
+
 import { useNavigate } from 'react-router-dom';
 import Stepper from '../../components/ui/Stepper';
-import { addCase, getDraft, clearDraft } from '../../lib/api';
+
+import {
+  addCase,
+  getDraft,
+  clearDraft,
+} from '../../lib/api';
+
 import { EMPTY_DRAFT } from '../../lib/useDraft';
 
 export default function Step5Review() {
   const navigate = useNavigate();
 
-  const [draft, setDraft] = useState<any>(EMPTY_DRAFT);
-  const [confirmed, setConfirmed] = useState(false);
-  const [submitting, setSubmitting] = useState(false);
-  const [error, setError] = useState('');
+  const [draft, setDraft] =
+    useState<any>(EMPTY_DRAFT);
+
+  const [confirmed, setConfirmed] =
+    useState(false);
+
+  const [submitting, setSubmitting] =
+    useState(false);
+
+  const [error, setError] =
+    useState('');
+
+  // -----------------------------------------
+  // Load latest server-side draft
+  // -----------------------------------------
 
   useEffect(() => {
+    let active = true;
+
     getDraft()
       .then((data) => {
+        if (!active) return;
+
         setDraft({
           ...EMPTY_DRAFT,
           ...(data || {}),
         });
       })
-      .catch(() => setDraft(EMPTY_DRAFT));
+      .catch(() => {
+        if (!active) return;
+
+        setDraft({
+          ...EMPTY_DRAFT,
+        });
+      });
+
+    return () => {
+      active = false;
+    };
   }, []);
 
-  const evidence = draft.evidence || {};
+  const evidence =
+    draft.evidence || {};
+
+  const people =
+    Array.isArray(draft.people)
+      ? draft.people
+      : [];
+
+  const documents =
+    Array.isArray(draft.documents)
+      ? draft.documents
+      : [];
+
+  // -----------------------------------------
+  // Submit final case
+  // -----------------------------------------
 
   const handleSubmit = async () => {
+    if (!confirmed || submitting) {
+      return;
+    }
+
     setError('');
     setSubmitting(true);
 
     try {
       await addCase({
-        title: draft.title || 'Untitled Case',
-        incidentDate: draft.date,
-        time: draft.time,
-        location: draft.location,
-        category: draft.category,
-        description: draft.description,
-        people: draft.people || [],
-        evidence: draft.evidence || null,
-        documents: draft.documents || [],
-      } as any);
+        title:
+          draft.title ||
+          'Untitled Case',
 
+        incidentDate:
+          draft.date || '',
+
+        time:
+          draft.time || '',
+
+        location:
+          draft.location || '',
+
+        category:
+          draft.category || '',
+
+        description:
+          draft.description || '',
+
+        people,
+
+        evidence:
+          draft.evidence || null,
+
+        documents,
+      });
+
+      // Clear server-side draft only
+      // after successful case creation.
       await clearDraft();
+
       navigate('/dashboard');
     } catch (err) {
       setError(
@@ -68,6 +138,7 @@ export default function Step5Review() {
     <div className="mx-auto max-w-[1080px] space-y-4 pb-10">
 
       {/* PAGE HEADER */}
+
       <div>
         <h1 className="text-2xl font-bold text-slate-900">
           Case Management
@@ -80,9 +151,11 @@ export default function Step5Review() {
       </div>
 
       {/* STEPPER */}
+
       <Stepper currentStep={5} />
 
-      {/* REVIEW TITLE */}
+      {/* REVIEW HEADER */}
+
       <div className="pt-1">
         <h2 className="text-lg font-bold text-slate-900">
           Review & Submit
@@ -94,9 +167,9 @@ export default function Step5Review() {
         </p>
       </div>
 
-      {/* ================================= */}
+      {/* ========================================= */}
       {/* INCIDENT DETAILS */}
-      {/* ================================= */}
+      {/* ========================================= */}
 
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
 
@@ -112,15 +185,20 @@ export default function Step5Review() {
 
           <button
             type="button"
-            onClick={() => navigate('/cases/new/step1')}
+            onClick={() =>
+              navigate('/cases/new/step1')
+            }
             className="flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-blue-700"
           >
             <Edit2 className="h-3.5 w-3.5" />
             Edit
           </button>
+
         </div>
 
         <div className="grid grid-cols-1 gap-x-10 gap-y-4 px-5 py-4 md:grid-cols-2">
+
+          {/* TITLE */}
 
           <div>
             <p className="text-[11px] font-semibold text-slate-500">
@@ -132,6 +210,8 @@ export default function Step5Review() {
             </p>
           </div>
 
+          {/* DATE + TIME */}
+
           <div>
             <p className="text-[11px] font-semibold text-slate-500">
               Date & Time
@@ -139,9 +219,14 @@ export default function Step5Review() {
 
             <p className="mt-1 text-sm text-slate-900">
               {draft.date || 'Not provided'}
-              {draft.time ? `, ${draft.time}` : ''}
+
+              {draft.time
+                ? `, ${draft.time}`
+                : ''}
             </p>
           </div>
+
+          {/* LOCATION */}
 
           <div className="md:col-span-2">
             <p className="text-[11px] font-semibold text-slate-500">
@@ -153,6 +238,20 @@ export default function Step5Review() {
             </p>
           </div>
 
+          {/* CATEGORY */}
+
+          <div>
+            <p className="text-[11px] font-semibold text-slate-500">
+              Category
+            </p>
+
+            <p className="mt-1 text-sm text-slate-900">
+              {draft.category || 'Not provided'}
+            </p>
+          </div>
+
+          {/* DESCRIPTION */}
+
           <div className="md:col-span-2">
             <p className="text-[11px] font-semibold text-slate-500">
               Description
@@ -162,12 +261,13 @@ export default function Step5Review() {
               {draft.description || 'Not provided'}
             </p>
           </div>
+
         </div>
       </section>
 
-      {/* ================================= */}
+      {/* ========================================= */}
       {/* PEOPLE INVOLVED */}
-      {/* ================================= */}
+      {/* ========================================= */}
 
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
 
@@ -183,48 +283,75 @@ export default function Step5Review() {
 
           <button
             type="button"
-            onClick={() => navigate('/cases/new/step2')}
+            onClick={() =>
+              navigate('/cases/new/step2')
+            }
             className="flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-blue-700"
           >
             <Edit2 className="h-3.5 w-3.5" />
             Edit
           </button>
+
         </div>
 
         <div className="space-y-2 px-5 py-4">
 
-          {!draft.people || draft.people.length === 0 ? (
+          {people.length === 0 ? (
             <p className="text-sm text-slate-500">
               No people added.
             </p>
           ) : (
-            draft.people.map((person: any, index: number) => (
-              <div
-                key={person.id || index}
-                className="flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
-              >
-                <div className="mr-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
-                  <User className="h-4 w-4" />
-                </div>
+            people.map(
+              (person: any, index: number) => (
+                <div
+                  key={
+                    person.id || index
+                  }
+                  className="flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
+                >
 
-                <div>
-                  <p className="text-sm font-semibold text-slate-900">
-                    {person.name || 'Unknown Individual'}
-                  </p>
+                  <div className="mr-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
+                    <User className="h-4 w-4" />
+                  </div>
 
-                  <p className="mt-0.5 text-sm text-slate-500">
-                    {person.relationship || 'Person involved'}
-                  </p>
+                  <div className="min-w-0">
+
+                    <p className="text-sm font-semibold text-slate-900">
+                      {person.name ||
+                        'Unknown Individual'}
+                    </p>
+
+                    <p className="mt-0.5 text-sm text-slate-500">
+                      {person.relationship ||
+                        'Person involved'}
+                    </p>
+
+                    {(person.contact ||
+                      person.address) && (
+                      <p className="mt-0.5 text-xs text-slate-500">
+                        {person.contact}
+
+                        {person.contact &&
+                        person.address
+                          ? ' • '
+                          : ''}
+
+                        {person.address}
+                      </p>
+                    )}
+
+                  </div>
                 </div>
-              </div>
-            ))
+              )
+            )
           )}
+
         </div>
       </section>
 
-      {/* ================================= */}
+      {/* ========================================= */}
       {/* EVIDENCE DETAILS */}
-      {/* ================================= */}
+      {/* ========================================= */}
 
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
 
@@ -241,15 +368,21 @@ export default function Step5Review() {
           <button
             type="button"
             onClick={() =>
-              navigate('/cases/new/step4', {
-                state: { stage: 3 },
-              })
+              navigate(
+                '/cases/new/step4',
+                {
+                  state: {
+                    stage: 3,
+                  },
+                }
+              )
             }
             className="flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-blue-700"
           >
             <Edit2 className="h-3.5 w-3.5" />
             Edit
           </button>
+
         </div>
 
         <div className="px-5 py-4">
@@ -267,26 +400,32 @@ export default function Step5Review() {
                 <Image className="h-4 w-4" />
               </div>
 
-              <div>
+              <div className="min-w-0">
+
                 <p className="text-sm font-semibold text-slate-900">
-                  {evidence.evidenceTitle || 'Evidence Item'}
+                  {evidence.evidenceTitle ||
+                    'Evidence Item'}
                 </p>
 
                 <p className="mt-0.5 text-sm text-slate-500">
-                  {evidence.evidenceType || 'Evidence'}
+                  {evidence.evidenceType ||
+                    'Evidence'}
+
                   {evidence.sourceLocation
                     ? ` • ${evidence.sourceLocation}`
                     : ''}
                 </p>
+
               </div>
             </div>
           )}
+
         </div>
       </section>
 
-      {/* ================================= */}
+      {/* ========================================= */}
       {/* SUPPORTING DOCUMENTS */}
-      {/* ================================= */}
+      {/* ========================================= */}
 
       <section className="rounded-xl border border-slate-200 bg-white shadow-sm">
 
@@ -303,51 +442,71 @@ export default function Step5Review() {
           <button
             type="button"
             onClick={() =>
-              navigate('/cases/new/step4', {
-                state: { stage: 4 },
-              })
+              navigate(
+                '/cases/new/step4',
+                {
+                  state: {
+                    stage: 4,
+                  },
+                }
+              )
             }
             className="flex items-center gap-1 text-sm font-medium text-slate-500 hover:text-blue-700"
           >
             <Edit2 className="h-3.5 w-3.5" />
             Edit
           </button>
+
         </div>
 
         <div className="space-y-2 px-5 py-4">
 
-          {!draft.documents || draft.documents.length === 0 ? (
+          {documents.length === 0 ? (
             <p className="text-sm text-slate-500">
               No documents uploaded.
             </p>
           ) : (
-            draft.documents.map((doc: any, index: number) => (
-              <div
-                key={doc.id || index}
-                className="flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
-              >
+            documents.map(
+              (doc: any, index: number) => (
+                <div
+                  key={
+                    doc.id || index
+                  }
+                  className="flex items-center rounded-lg border border-slate-200 bg-slate-50 px-3 py-2.5"
+                >
 
-                <div className="mr-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-100 text-green-700">
-                  <FileText className="h-4 w-4" />
+                  <div className="mr-3 flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-green-100 text-green-700">
+                    <FileText className="h-4 w-4" />
+                  </div>
+
+                  <div className="min-w-0">
+
+                    <p className="truncate text-sm font-semibold text-slate-900">
+                      {doc.name ||
+                        'Unnamed Document'}
+                    </p>
+
+                    <p className="mt-0.5 text-sm text-slate-500">
+                      {doc.type ||
+                        'Document'}
+
+                      {doc.size
+                        ? ` • ${doc.size}`
+                        : ''}
+                    </p>
+
+                  </div>
                 </div>
-
-                <div className="min-w-0">
-                  <p className="truncate text-sm font-semibold text-slate-900">
-                    {doc.name}
-                  </p>
-
-                  <p className="mt-0.5 text-sm text-slate-500">
-                    {doc.type || 'Document'}
-                    {doc.size ? ` • ${doc.size}` : ''}
-                  </p>
-                </div>
-              </div>
-            ))
+              )
+            )
           )}
+
         </div>
       </section>
 
+      {/* ========================================= */}
       {/* ERROR */}
+      {/* ========================================= */}
 
       {error && (
         <div className="rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-600">
@@ -355,9 +514,9 @@ export default function Step5Review() {
         </div>
       )}
 
-      {/* ================================= */}
+      {/* ========================================= */}
       {/* CONFIRM + SUBMIT */}
-      {/* ================================= */}
+      {/* ========================================= */}
 
       <section className="rounded-xl border border-slate-200 bg-white px-5 py-4 shadow-sm">
 
@@ -366,7 +525,11 @@ export default function Step5Review() {
           <input
             type="checkbox"
             checked={confirmed}
-            onChange={(e) => setConfirmed(e.target.checked)}
+            onChange={(e) =>
+              setConfirmed(
+                e.target.checked
+              )
+            }
             className="mt-0.5 h-4 w-4 rounded border-slate-300 text-blue-600 focus:ring-blue-500"
           />
 
@@ -375,16 +538,24 @@ export default function Step5Review() {
             accurate to the best of my knowledge. I understand that
             submitting false information may carry legal consequences.
           </span>
+
         </label>
+
+        {/* BOTTOM ACTIONS */}
 
         <div className="mt-4 flex items-center justify-between">
 
           <button
             type="button"
             onClick={() =>
-              navigate('/cases/new/step4', {
-                state: { stage: 4 },
-              })
+              navigate(
+                '/cases/new/step4',
+                {
+                  state: {
+                    stage: 4,
+                  },
+                }
+              )
             }
             className="flex items-center gap-1.5 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
           >
@@ -395,7 +566,10 @@ export default function Step5Review() {
           <button
             type="button"
             onClick={handleSubmit}
-            disabled={!confirmed || submitting}
+            disabled={
+              !confirmed ||
+              submitting
+            }
             className="flex items-center gap-2 rounded-lg bg-blue-700 px-5 py-2 text-sm font-medium text-white hover:bg-blue-800 disabled:cursor-not-allowed disabled:opacity-50"
           >
             {submitting
@@ -406,8 +580,10 @@ export default function Step5Review() {
               <ArrowRight className="h-3.5 w-3.5" />
             )}
           </button>
+
         </div>
       </section>
+
     </div>
   );
 }

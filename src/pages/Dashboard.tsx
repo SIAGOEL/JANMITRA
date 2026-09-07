@@ -18,7 +18,7 @@ import { useNavigate } from 'react-router-dom';
 import { useEffect, useState } from 'react';
 import Card from '../components/ui/Card';
 import Badge from '../components/ui/Badge';
-import { getCases } from '../lib/api';
+import { getCases, getDocuments } from '../lib/api';
 
 export default function Dashboard() {
   const navigate = useNavigate();
@@ -27,11 +27,32 @@ export default function Dashboard() {
   const firstName = userName.split(' ')[0];
 
   const [allCases, setAllCases] = useState<any[]>([]);
+  const [documentCount, setDocumentCount] = useState(0);
 
   useEffect(() => {
     getCases()
-      .then((data) => setAllCases(Array.isArray(data) ? data : []))
-      .catch(() => setAllCases([]));
+      .then((data) => {
+        setAllCases(Array.isArray(data) ? data : []);
+      })
+      .catch(() => {
+        setAllCases([]);
+      });
+
+    getDocuments()
+      .then((data) => {
+        if (Array.isArray(data)) {
+          setDocumentCount(data.length);
+        } else if (data && Array.isArray(data.documents)) {
+          setDocumentCount(data.documents.length);
+        } else if (data && typeof data.count === 'number') {
+          setDocumentCount(data.count);
+        } else {
+          setDocumentCount(0);
+        }
+      })
+      .catch(() => {
+        setDocumentCount(0);
+      });
   }, []);
 
   const activeCount = allCases.filter(
@@ -41,11 +62,6 @@ export default function Dashboard() {
   const pendingCount = allCases.filter(
     (c: any) => c.status === 'Pending'
   ).length;
-
-  const totalDocs = Math.max(
-    14,
-    14 + (allCases.length - 7) * 2
-  );
 
   const stats = [
     {
@@ -68,9 +84,9 @@ export default function Dashboard() {
     },
     {
       label: 'Total Documents',
-      value: totalDocs.toString(),
+      value: documentCount.toString(),
       icon: FileText,
-      change: '18% from last month',
+      change: 'Live from backend',
       changeType: 'up',
       iconBg: 'bg-blue-50',
       iconColor: 'text-blue-500',
@@ -366,7 +382,7 @@ export default function Dashboard() {
                       </td>
 
                       <td className="whitespace-nowrap px-4 py-3 text-slate-600">
-                        {caseItem.date}
+                        {caseItem.date || caseItem.incidentDate || '—'}
                       </td>
 
                       <td className="px-4 py-3">
@@ -384,7 +400,8 @@ export default function Dashboard() {
                             <Eye className="h-3.5 w-3.5" />
                           </button>
 
-                          <button className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:bg-slate-100">
+                          <button className="flex h-7 w-7 items-center justify-center rounded-md border border-slate-200 text-slate-500 transition hover:bg-slate-100"
+                          >
                             <MoreVertical className="h-3.5 w-3.5" />
                           </button>
                         </div>
@@ -435,7 +452,10 @@ export default function Dashboard() {
             </div>
 
             <div className="divide-y divide-slate-100">
-              <button className="flex w-full items-center justify-between px-4 py-3 text-left text-xs text-slate-700 hover:bg-slate-50">
+              <button
+                onClick={() => navigate('/documents')}
+                className="flex w-full items-center justify-between px-4 py-3 text-left text-xs text-slate-700 hover:bg-slate-50"
+              >
                 <span className="flex items-center gap-2">
                   <Upload className="h-4 w-4 text-blue-500" />
                   Upload Document

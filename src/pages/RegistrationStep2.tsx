@@ -40,7 +40,7 @@ export default function RegistrationStep2() {
     supervisingOfficer.trim() !== "" &&
     officialEmail.trim() !== "" &&
     officialPhone.trim() !== "" &&
-    emailVerified;
+    emailVerified &&
     phoneVerified;
 
   // Send OTP

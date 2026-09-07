@@ -2,6 +2,7 @@ const jwt = require('jsonwebtoken');
 const User = require('../models/User');
 const EmailOTP = require('../models/EmailOTP');
 const ApiError = require('../utils/ApiError');
+const Audit = require('../models/Audit');
 
 function signToken(user) {
   return jwt.sign(
@@ -89,8 +90,13 @@ async function login(req, res, next) {
       );
     }
 
-    const token = signToken(user);
+const token = signToken(user);
 
+await Audit.create({
+  type: 'login',
+  text: `User ${user.fullName} logged in`,
+  accessedBy: user.fullName,
+});
     res.json({
       success: true,
       token,
