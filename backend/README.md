@@ -1,194 +1,241 @@
-# KORA / Janmitra — Backend API
+# JANMITRA / KORA — Backend API
 
-REST API for the **Janmitra** Legal Investigation & Case Management frontend (a Vite + React app).
-Built with **Node.js + Express + MongoDB (Mongoose)** and JWT authentication.
-
-The endpoints mirror, one-to-one, every data operation the frontend currently performs against
-`localStorage` (`src/lib/data.ts`) — case listing, case registration (multi-step draft), case
-detail, and login — so the React app can switch from `localStorage` to this API with minimal
-wiring (see [`INTEGRATION.md`](./INTEGRATION.md)).
+REST API for the **Janmitra** Legal Investigation & Case Management System.  
+Stack: **Node.js + Express + MongoDB Atlas (Mongoose) + JWT**
 
 ---
 
-## Why this stack
-
-| Choice | Reason |
-| --- | --- |
-| **Express** | Minimal, ubiquitous, and exactly what the task asked for. Perfect for a focused REST API. |
-| **MongoDB + Mongoose** | The frontend already treats a case as a **self-contained JSON document** with embedded `people[]` and `documents[]` arrays (and stores files inline as base64). MongoDB stores that shape as-is, so API responses match the frontend's expected objects with almost no transformation. No joins are needed — a case is never queried by its sub-people. Mongoose still gives us schemas, enums, and validation. |
-| **JWT (stateless)** | The frontend is a SPA with no server session; a bearer token in `localStorage`/memory is the natural fit. |
-
-> If you specifically need relational guarantees (SQL joins, foreign keys), the same design maps
-> cleanly to **PostgreSQL + Prisma** — tell me and I'll port it. For this frontend's data shape,
-> Mongo is the lower-friction, closer match.
-
----
-
-## Requirements
-
-- **Node.js** 18+
-- **MongoDB** — either
-  - a local server (`mongodb://127.0.0.1:27017`), or
-  - a free **MongoDB Atlas** cluster (paste its SRV string into `MONGODB_URI`).
-
----
-
-## Setup
+## Quick Start
 
 ```bash
 cd backend
 npm install
-cp .env.example .env      # a ready-to-use .env is already included for local dev
-npm run seed              # optional: load the 7 demo cases + a demo user
-npm run dev               # starts on http://localhost:5000 (nodemon)
+cp .env.example .env          # fill in MONGODB_URI + JWT_SECRET
+npm run seed                  # optional: seeds 7 demo cases + demo admin user
+npm run dev                   # http://localhost:5000 (nodemon, auto-reload)
 ```
 
-`npm start` runs without nodemon (for production).
-
-Check it's alive:
-
+**Check it's alive:**
 ```bash
 curl http://localhost:5000/api/health
 ```
 
-**Demo login (after `npm run seed`):** `officer@janmitra.gov` / `password123`
+**Demo credentials (after `npm run seed`):**
+```
+Email:    officer@janmitra.gov
+Password: 12345678
+```
+
+`npm start` runs without nodemon (production mode).
 
 ---
 
-## Environment variables (`.env`)
+## Environment Variables
 
-| Var | Default | Notes |
-| --- | --- | --- |
-| `PORT` | `5000` | API port |
-| `NODE_ENV` | `development` | |
-| `CLIENT_URL` | `http://localhost:5173` | CORS origin(s). Comma-separate multiple, or `*` for all. |
-| `MONGODB_URI` | `mongodb://127.0.0.1:27017/kora` | Local Mongo or Atlas SRV string |
-| `JWT_SECRET` | — | **Change in production** |
-| `JWT_EXPIRES_IN` | `7d` | Token lifetime |
+Copy `.env.example` to `.env` and fill in the values below.
+
+| Variable | Default | Required | Notes |
+|---|---|---|---|
+| `PORT` | `5000` | No | HTTP port |
+| `NODE_ENV` | `development` | No | `development` · `production` · `test` |
+| `CLIENT_URL` | `http://localhost:5173` | No | CORS origin(s). Comma-separate multiple, or `*` for all |
+| `MONGODB_URI` | local mongo | **Yes** | Atlas SRV string or `mongodb://127.0.0.1:27017/kora` |
+| `JWT_SECRET` | — | **Yes** | Random string, keep secret |
+| `JWT_EXPIRES_IN` | `7d` | No | Token lifetime |
+| `STORAGE_PROVIDER` | `local` | No | `local` or `S3` |
+| `AWS_REGION` | — | If S3 | e.g. `ap-south-1` |
+| `AWS_ACCESS_KEY_ID` | — | If S3 | |
+| `AWS_SECRET_ACCESS_KEY` | — | If S3 | |
+| `AWS_S3_BUCKET` | — | If S3 | |
 
 ---
 
-## Project structure
+## Project Structure
 
 ```
 backend/
-├── .env / .env.example
+├── .env                          # local secrets (gitignored)
+├── .env.example                  # template — commit this
+├── API_CONTRACT.md               # full endpoint documentation
 ├── package.json
 └── src/
-    ├── server.js              # boot: load env, connect DB, listen
-    ├── app.js                 # express app: CORS, JSON, routes, error handler
-    ├── seed.js                # demo data (matches the frontend defaults)
+    ├── server.js                 # boot: load env → connect DB → listen
+    ├── app.js                    # Express app: CORS, JSON, routes, error handler
+    ├── seed.js                   # demo data loader
+    │
     ├── config/
-    │   └── db.js              # mongoose connection
+    │   └── db.js                 # Mongoose connection with logging
+    │
     ├── models/
-    │   ├── User.js            # fullName, email, password (bcrypt)
-    │   ├── Case.js            # case + embedded people[] & documents[]
-    │   └── Draft.js           # per-user in-progress registration draft
+    │   ├── User.js               # fullName, email, password (bcrypt), role
+    │   ├── Case.js               # case + embedded people[] & documents[]
+    │   ├── Document.js           # standalone Document record (DMS layer)
+    │   ├── Draft.js              # per-user in-progress registration draft
+    │   ├── Audit.js              # system activity log
+    │   └── EmailOTP.js           # OTP records for email verification
+    │
     ├── controllers/
-    │   ├── authController.js
-    │   ├── caseController.js
-    │   └── draftController.js
+    │   ├── authController.js     # register, login, me
+    │   ├── caseController.js     # full CRUD + RBAC + audit
+    │   ├── documentController.js # full CRUD + storage abstraction + audit
+    │   ├── userController.js     # admin: list, get, update, delete users
+    │   ├── draftController.js    # get, save, clear draft
+    │   ├── auditController.js    # read-only audit trail
+    │   ├── otpController.js      # email OTP flow
+    │   └── phoneOTPController.js # phone OTP flow (Twilio)
+    │
     ├── routes/
-    │   ├── authRoutes.js       # /api/auth
-    │   ├── caseRoutes.js       # /api/cases
-    │   └── draftRoutes.js      # /api/draft
+    │   ├── authRoutes.js         # /api/auth
+    │   ├── caseRoutes.js         # /api/cases
+    │   ├── documentRoutes.js     # /api/documents
+    │   ├── userRoutes.js         # /api/users  (Admin only)
+    │   ├── draftRoutes.js        # /api/draft
+    │   ├── auditRoutes.js        # /api/audit
+    │   ├── otpRoutes.js          # /api/otp
+    │   └── phoneOTPRoutes.js     # /api/phone-otp
+    │
     ├── middleware/
-    │   ├── auth.js            # JWT protect()
-    │   ├── validate.js        # express-validator -> 400
-    │   └── errorHandler.js    # 404 + central error formatter
+    │   ├── auth.js               # JWT protect() — attaches req.user
+    │   ├── authorize.js          # RBAC authorize(...roles)
+    │   ├── validate.js           # express-validator → 400 ApiError
+    │   ├── documentupload.js     # Multer config (10 MB, allowed MIME types)
+    │   └── errorHandler.js       # 404 catch-all + central error normaliser
+    │
+    ├── services/
+    │   └── storageService.js     # File storage abstraction (local / S3 stub)
+    │
     └── utils/
-        ├── ApiError.js
-        ├── caseId.js          # "FIR-YYYY-NNN" generator
-        └── formatDate.js      # "Aug 26, 2026" display format
+        ├── ApiError.js           # Operational error class with statusCode
+        ├── caseId.js             # "FIR-YYYY-NNN" / "CMP-YYYY-NNN" generator
+        └── formatDate.js         # "Aug 26, 2026" display-date formatter
 ```
 
 ---
 
-## API reference
+## Data Models
 
-Base URL: `http://localhost:5000/api`
-Protected routes require header: `Authorization: Bearer <token>`
+### User
+| Field | Type | Notes |
+|---|---|---|
+| `fullName` | String | Required |
+| `email` | String | Unique, lowercase |
+| `password` | String | Bcrypt hashed, `select: false` |
+| `role` | String | `Admin` · `Senior Officer` · `Investigator` · `Clerk` · `Viewer` |
+| `createdAt` | Date | Auto |
+| `updatedAt` | Date | Auto |
 
-### Auth
+### Case
+| Field | Type | Notes |
+|---|---|---|
+| `caseId` | String | Unique, e.g. `FIR-2026-001` |
+| `title` | String | Required |
+| `incidentDate` | String | `YYYY-MM-DD` |
+| `time` | String | |
+| `location` | String | |
+| `category` | String | Enum |
+| `description` | String | |
+| `status` | String | `Active` · `Pending` · `Closed` |
+| `people` | Array | Embedded person sub-documents |
+| `documents` | Array | Embedded docs (wizard/base64 storage) |
+| `createdBy` | ObjectId | ref: User |
 
-| Method | Path | Body | Response |
-| --- | --- | --- | --- |
-| `POST` | `/auth/register` | `{ fullName, email, password }` | `{ success, token, user }` |
-| `POST` | `/auth/login` | `{ email, password }` | `{ success, token, user }` |
-| `GET` | `/auth/me` 🔒 | — | `{ success, user }` |
+### Document (standalone — DMS layer)
+| Field | Type | Notes |
+|---|---|---|
+| `caseId` | String | Indexed string FK to Case.caseId |
+| `caseObjectId` | ObjectId | Shadow ref for populate() |
+| `name` | String | Human-readable name |
+| `documentType` | String | Enum (FIR, Evidence, etc.) |
+| `description` | String | |
+| `fileName` | String | Original filename |
+| `mimeType` | String | |
+| `fileSize` | Number | Bytes |
+| `storageProvider` | String | `local` · `S3` · `GCS` |
+| `storageKey` | String | Relative path or S3 key |
+| `filePath` | String | Absolute local path or signed URL |
+| `uploadedBy` | ObjectId | ref: User |
 
-### Cases 🔒
+---
 
-| Method | Path | Body | Response |
-| --- | --- | --- | --- |
-| `GET` | `/cases?search=&status=` | — | `Case[]` (raw array) |
-| `GET` | `/cases/:id` | — | `Case` |
-| `POST` | `/cases` | full case/draft | `Case` (201) |
-| `PATCH` | `/cases/:id` | any updatable fields | `Case` |
-| `DELETE` | `/cases/:id` | — | `{ success, message }` |
+## RBAC Summary
 
-`:id` is the human case id, e.g. `FIR-2023-089`.
+| Resource | Viewer | Clerk | Investigator | Senior Officer | Admin |
+|---|:---:|:---:|:---:|:---:|:---:|
+| Cases — Read | ✅ | ✅ | ✅ (own) | ✅ | ✅ |
+| Cases — Create | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Cases — Update | ❌ | ❌ | ✅ (own) | ✅ | ✅ |
+| Cases — Delete | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Documents — Read/Download | ✅ | ✅ | ✅ | ✅ | ✅ |
+| Documents — Upload/Update | ❌ | ❌ | ✅ | ✅ | ✅ |
+| Documents — Delete | ❌ | ❌ | ❌ | ✅ | ✅ |
+| Users — All | ❌ | ❌ | ❌ | ❌ | ✅ |
 
-**`Case` response shape** (extends the frontend's list shape):
+---
 
-```jsonc
+## File Storage
+
+Files are uploaded via `multipart/form-data` to `POST /api/documents`.
+
+### Local (default)
+Files are saved to `backend/uploads/documents/`. The directory is created automatically.
+
+### Switching to S3
+1. Install the AWS SDK: `npm install @aws-sdk/client-s3`
+2. Set `STORAGE_PROVIDER=S3` and the `AWS_*` env vars in `.env`
+3. Fill in the S3 section in `src/services/storageService.js`
+
+No other changes are needed — the storage layer is fully abstracted.
+
+---
+
+## Validation & Error Format
+
+All inputs are validated with `express-validator`. On failure, the API returns:
+
+```json
 {
-  "id": "FIR-2024-089",        // the FIR/complaint string (used as key & route param)
-  "title": "Property Dispute - Sector 4",
-  "date": "Aug 26, 2026",       // display date (matches frontend tables)
-  "status": "Pending",          // Active | Pending | Closed
-  "incidentDate": "2026-08-20", // YYYY-MM-DD (Step 1)
-  "time": "14:30",
-  "location": "...",
-  "category": "Property Dispute",
-  "description": "...",
-  "people": [
-    { "id": "...", "name": "Jane Doe", "relationship": "Witness", "contact": "", "address": "", "notes": "" }
-  ],
-  "documents": [
-    { "id": "...", "name": "fir.pdf", "type": "PDF", "size": "1.2 MB", "dataUrl": "data:...", "category": "FIR Copy" }
-  ],
-  "createdAt": "...", "updatedAt": "..."
+  "success": false,
+  "error": "Incident title is required, Invalid status"
 }
 ```
 
-### Draft 🔒 (per-user, powers the multi-step registration wizard)
+Status codes:
 
-| Method | Path | Body | Response |
-| --- | --- | --- | --- |
-| `GET` | `/draft` | — | draft object |
-| `PUT` | `/draft` | draft object | saved draft |
-| `DELETE` | `/draft` | — | empty draft |
-
-Draft shape: `{ title, date, time, location, category, description, people[], documents[] }`
-— identical to the frontend's `getDraft()` default.
-
----
-
-## Validation & errors
-
-- Inputs validated with `express-validator` (title required, valid email, password ≥ 8, enum checks for `status`/`category`).
-- All errors return `{ "success": false, "error": "message" }` with an appropriate HTTP status
-  (400 validation, 401 auth, 404 not found, 409 duplicate, 500 server).
+| Code | When |
+|---|---|
+| `400` | Validation failure or business rule violation |
+| `401` | Missing or invalid JWT |
+| `403` | Authenticated but insufficient role |
+| `404` | Resource not found |
+| `409` | Duplicate unique value |
+| `500` | Unexpected server error |
 
 ---
 
-## Frontend ↔ backend endpoint map (verification checklist)
+## API Documentation
 
-Every place the frontend touches data today, and its matching endpoint:
+See [`API_CONTRACT.md`](./API_CONTRACT.md) for the complete endpoint reference with request/response shapes, examples, and error codes.
 
-| Frontend operation (file) | Backend endpoint |
-| --- | --- |
-| `getCases()` — Dashboard, CaseManagement, CaseDetail | `GET /api/cases` |
-| `addCase()` — Step5Review submit | `POST /api/cases` |
-| `cases.find(c => c.id === id)` — CaseDetail | `GET /api/cases/:id` |
-| `getDraft()` — Step 1/2/4/5 | `GET /api/draft` |
-| `saveDraft()` — Step 1/2/4 | `PUT /api/draft` |
-| `clearDraft()` — Step5Review submit | `DELETE /api/draft` |
-| Login step 1 (email + password) — `handleEmailSubmit` | `POST /api/auth/login` |
-| Login step 2 (full name) — `handleNameSubmit` | `POST /api/auth/register` + `GET /api/auth/me` |
-| Sign out — `handleSignOut` | client-side token clear (no endpoint) |
-| CaseDetail "Update Status" / "Close Case" | `PATCH /api/cases/:id` |
-| CaseManagement search + status filter | `GET /api/cases?search=&status=` |
+---
 
-See [`INTEGRATION.md`](./INTEGRATION.md) for the drop-in frontend client that wires these up.
+## Scripts
+
+| Script | Description |
+|---|---|
+| `npm run dev` | Start with nodemon (auto-reload on file changes) |
+| `npm start` | Production start (no nodemon) |
+| `npm run seed` | Load demo cases + admin user into MongoDB |
+| `npm run db` | Local dev DB helper (see `scripts/dev-db.cjs`) |
+
+---
+
+## Stack Rationale
+
+| Choice | Reason |
+|---|---|
+| **Express** | Minimal, well-understood, perfect for a focused REST API |
+| **MongoDB + Mongoose** | Case data is naturally document-shaped (embedded people & files). No joins needed. Schemas + validation via Mongoose |
+| **JWT (stateless)** | The SPA frontend stores a bearer token; no server session required |
+| **bcryptjs** | Password hashing — battle-tested, pure JS, no native dep |
+| **multer** | Multipart file upload — integrates cleanly with Express |
+| **express-validator** | Declarative validation co-located with routes |

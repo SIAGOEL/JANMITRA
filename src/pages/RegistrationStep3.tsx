@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
+import { register } from "../lib/api";
 import {
   ArrowLeft,
   ArrowRight,
+  CheckCircle2,
   ChevronRight,
   Eye,
+  EyeOff,
   Fingerprint,
   Glasses,
   Lightbulb,
@@ -24,49 +27,214 @@ export default function RegistrationStep3() {
 
   const [faceVerified, setFaceVerified] = useState(false);
   const [biometricVerified, setBiometricVerified] = useState(false);
-  const [pin, setPin] = useState("");
+
+  // Password state (typed, not PIN pad — so we can satisfy 8-digit backend rule
+  // while giving the user a real password input they can see/hide)
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirm, setShowConfirm] = useState(false);
+
+  // Submission state
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState("");
+  const [registeredUser, setRegisteredUser] = useState<any>(null);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [phoneOtpSent, setPhoneOtpSent] = useState(false);
+  const [phoneOtpVerified, setPhoneOtpVerified] = useState(false);
 
   useEffect(() => {
     window.scrollTo(0, 0);
   }, []);
 
+  // ---------- helpers ----------
+
+  const passwordValid = /^\d{8}$/.test(password);
+  const passwordsMatch = password === confirmPassword && confirmPassword !== "";
+
+  // ---------- fake scan handlers ----------
+
   const handleFaceScan = () => {
     setFaceVerified(true);
-
-    setTimeout(() => {
-      setVerificationStep(2);
-    }, 400);
+    setTimeout(() => setVerificationStep(2), 400);
   };
 
   const handleBiometricScan = () => {
     setBiometricVerified(true);
-
-    setTimeout(() => {
-      setVerificationStep(3);
-    }, 400);
+    setTimeout(() => setVerificationStep(3), 400);
   };
 
-  const handleNumberClick = (number: string) => {
-    if (pin.length >= 6) return;
-    setPin((previous) => previous + number);
+  // ---------- final submit → calls backend ----------
+
+  const handleSendPhoneOTP = async () => {
+    const savedStep2Raw = sessionStorage.getItem("registrationStep2");
+    if (!savedStep2Raw) {
+      setError("Registration data is missing. Please go back and complete Step 2.");
+      return;
+    }
+
+    const savedStep2 = JSON.parse(savedStep2Raw);
+    const phone = String(savedStep2.officialPhone || "").trim();
+
+    if (!phone) {
+      setError("Official phone number is required before OTP verification.");
+      return;
+    }
+
+    setOtpLoading(true);
+    setError("");
+
+    try {
+      await fetch("http://localhost:5000/api/phone-otp/send", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone }),
+      }).then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "Unable to send OTP.");
+        setPhoneOtpSent(true);
+        setPhoneOtpVerified(false);
+      });
+    } catch (err: any) {
+      setError(err.message || "Unable to send OTP to your phone number.");
+    } finally {
+      setOtpLoading(false);
+    }
   };
 
-  const handlePinDelete = () => {
-    setPin((previous) => previous.slice(0, -1));
+  const handleVerifyPhoneOTP = async () => {
+    const savedStep2Raw = sessionStorage.getItem("registrationStep2");
+    if (!savedStep2Raw) {
+      setError("Registration data is missing. Please go back and complete Step 2.");
+      return;
+    }
+
+    const savedStep2 = JSON.parse(savedStep2Raw);
+    const phone = String(savedStep2.officialPhone || "").trim();
+
+    if (!phone) {
+      setError("Official phone number is required before OTP verification.");
+      return;
+    }
+
+    if (!otpCode.trim() || otpCode.trim().length !== 6) {
+      setError("Please enter the 6-digit OTP sent to your phone.");
+      return;
+    }
+
+    setOtpLoading(true);
+    setError("");
+
+    try {
+      await fetch("http://localhost:5000/api/phone-otp/verify", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ phone, otp: otpCode.trim() }),
+      }).then(async (res) => {
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.message || "OTP verification failed.");
+        setPhoneOtpVerified(true);
+        setError("");
+      });
+    } catch (err: any) {
+      setError(err.message || "Invalid OTP. Please try again.");
+      setPhoneOtpVerified(false);
+    } finally {
+      setOtpLoading(false);
+    }
   };
 
-  const handleSubmitRegistration = () => {
-    sessionStorage.setItem(
-      "registrationStep3",
-      JSON.stringify({
-        faceVerified,
-        biometricVerified,
-        pinCreated: pin.length >= 4,
-      }),
-    );
+  const handleSubmitRegistration = async () => {
+    const savedStep2Raw = sessionStorage.getItem("registrationStep2");
+    if (!savedStep2Raw) {
+      setError("Registration data is missing. Please go back and complete Step 2.");
+      return;
+    }
 
-    // Submit ke baad Screen 53 open hogi.
-    setVerificationStep(4);
+    const savedStep2 = JSON.parse(savedStep2Raw);
+    if (savedStep2.officialPhone && !phoneOtpVerified) {
+      setError("Please verify the OTP sent to your official phone number before submitting.");
+      return;
+    }
+
+    setError("");
+
+    // Pull data collected in Steps 1 & 2 from sessionStorage
+    const step1Raw = sessionStorage.getItem("registrationStep1");
+    const finalStep2Raw = sessionStorage.getItem("registrationStep2");
+
+    if (!step1Raw || !finalStep2Raw) {
+      setError(
+        "Registration data is missing. Please go back and complete Steps 1 and 2."
+      );
+      return;
+    }
+
+    const step1 = JSON.parse(step1Raw);
+    const step2 = JSON.parse(finalStep2Raw);
+
+    // The backend requires: fullName, email, password (8 digits)
+    const fullName = step1.fullName?.trim();
+    const email = step2.officialEmail?.trim().toLowerCase();
+
+    if (!fullName || !email) {
+      setError(
+        "Full name or email is missing. Please go back to Step 1 / Step 2."
+      );
+      return;
+    }
+
+    if (!passwordValid) {
+      setError("Password must be exactly 8 digits (numbers only).");
+      return;
+    }
+
+    if (!passwordsMatch) {
+      setError("Passwords do not match.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const extraProfile = {
+        dateOfBirth: step1.dateOfBirth,
+        gender: step1.gender,
+        govIdType: step1.govIdType,
+        govIdNumber: step1.govIdNumber,
+        address: step1.address,
+        department: step2.department,
+        designation: step2.designation,
+        employeeId: step2.employeeId,
+        jurisdiction: step2.jurisdiction,
+        joiningDate: step2.joiningDate,
+        supervisingOfficer: step2.supervisingOfficer,
+        officialEmail: step2.officialEmail,
+        officialPhone: step2.officialPhone,
+      };
+
+      const user = await register(fullName, email, password, extraProfile);
+
+      localStorage.setItem("user", JSON.stringify(user));
+      localStorage.setItem("userName", user.fullName || fullName);
+
+      setRegisteredUser(user);
+
+      sessionStorage.setItem(
+        "registrationStep3",
+        JSON.stringify({ faceVerified, biometricVerified, pinCreated: true })
+      );
+
+      setVerificationStep(4);
+    } catch (err: any) {
+      setError(
+        err.message ||
+          "Unable to connect to the server. Make sure the backend is running."
+      );
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -218,7 +386,11 @@ export default function RegistrationStep3() {
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-blue-100 text-blue-600">
-                        <ScanFace size={17} />
+                        {faceVerified ? (
+                          <CheckCircle2 size={17} className="text-green-600" />
+                        ) : (
+                          <ScanFace size={17} />
+                        )}
                       </div>
 
                       <div>
@@ -255,7 +427,11 @@ export default function RegistrationStep3() {
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-green-100 text-green-600">
-                        <Fingerprint size={17} />
+                        {biometricVerified ? (
+                          <CheckCircle2 size={17} className="text-green-600" />
+                        ) : (
+                          <Fingerprint size={17} />
+                        )}
                       </div>
 
                       <div>
@@ -292,7 +468,11 @@ export default function RegistrationStep3() {
                   >
                     <div className="flex items-center gap-3">
                       <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
-                        <LockKeyhole size={17} />
+                        {passwordValid && passwordsMatch ? (
+                          <CheckCircle2 size={17} className="text-green-600" />
+                        ) : (
+                          <LockKeyhole size={17} />
+                        )}
                       </div>
 
                       <div>
@@ -307,9 +487,9 @@ export default function RegistrationStep3() {
                         </div>
 
                         <p className="mt-1 text-[12px] leading-4 text-slate-500">
-                          Create a strong password to secure
+                          Create an 8-digit numeric password
                           <br />
-                          your account.
+                          to secure your account.
                         </p>
                       </div>
                     </div>
@@ -402,7 +582,7 @@ export default function RegistrationStep3() {
                       className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700"
                     >
                       <ScanFace size={13} />
-                      {faceVerified ? "Verified" : "Start Scan"}
+                      {faceVerified ? "✓ Verified" : "Start Scan"}
                     </button>
                   </div>
                 </div>
@@ -465,7 +645,7 @@ export default function RegistrationStep3() {
                       className="flex items-center gap-2 rounded-md bg-blue-600 px-4 py-2 text-xs font-medium text-white hover:bg-blue-700"
                     >
                       <Fingerprint size={13} />
-                      {biometricVerified ? "Verified" : "Start Scan"}
+                      {biometricVerified ? "✓ Verified" : "Start Scan"}
                     </button>
                   </div>
                 </div>
@@ -482,113 +662,192 @@ export default function RegistrationStep3() {
                     </p>
                   </div>
 
-                  <div className="mt-4 flex justify-center gap-2">
-                    {[0, 1, 2, 3, 4, 5].map((index) => (
-                      <div
-                        key={index}
-                        className={`h-2 w-2 rounded-full border ${
-                          index < pin.length
-                            ? "border-blue-600 bg-blue-600"
-                            : "border-slate-400 bg-white"
-                        }`}
-                      />
-                    ))}
-                  </div>
+                  <p className="mt-3 text-center text-[11px] text-slate-500">
+                    Create an <strong>8-digit numeric password</strong> for your
+                    account.
+                  </p>
 
-                  <div className="mx-auto mt-4 grid w-[150px] grid-cols-3 gap-2">
-                    {["1", "2", "3", "4", "5", "6", "7", "8", "9"].map(
-                      (number) => (
+                  {/* Password field */}
+                  <div className="mt-4 space-y-3">
+                    <div>
+                      <label className="mb-1 block text-[12px] font-semibold text-slate-700">
+                        Password
+                      </label>
+
+                      <div className="relative">
+                        <input
+                          type={showPassword ? "text" : "password"}
+                          value={password}
+                          onChange={(e) => setPassword(e.target.value)}
+                          maxLength={8}
+                          placeholder="Enter 8-digit password"
+                          className="h-[36px] w-full rounded-[5px] border border-slate-300 bg-white px-3 pr-10 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        />
+
                         <button
-                          key={number}
                           type="button"
-                          onClick={() => handleNumberClick(number)}
-                          className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eef4fb] text-sm font-semibold text-slate-800 transition hover:bg-blue-100"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
                         >
-                          {number}
+                          {showPassword ? (
+                            <EyeOff size={15} />
+                          ) : (
+                            <Eye size={15} />
+                          )}
                         </button>
-                      ),
-                    )}
+                      </div>
 
-                    <div />
+                      {password && !passwordValid && (
+                        <p className="mt-1 text-[11px] text-red-500">
+                          Must be exactly 8 digits (0–9 only).
+                        </p>
+                      )}
 
-                    <button
-                      type="button"
-                      onClick={() => handleNumberClick("0")}
-                      className="flex h-10 w-10 items-center justify-center rounded-full bg-[#eef4fb] text-sm font-semibold text-slate-800 transition hover:bg-blue-100"
-                    >
-                      0
-                    </button>
+                      {passwordValid && (
+                        <p className="mt-1 text-[11px] text-green-600">
+                          ✓ Valid password
+                        </p>
+                      )}
+                    </div>
 
-                    <button
-                      type="button"
-                      onClick={handlePinDelete}
-                      className="text-[12px] text-slate-500 hover:text-red-500"
-                    >
-                      Delete
-                    </button>
+                    <div>
+                      <label className="mb-1 block text-[12px] font-semibold text-slate-700">
+                        Confirm Password
+                      </label>
+
+                      <div className="relative">
+                        <input
+                          type={showConfirm ? "text" : "password"}
+                          value={confirmPassword}
+                          onChange={(e) => setConfirmPassword(e.target.value)}
+                          maxLength={8}
+                          placeholder="Re-enter password"
+                          className="h-[36px] w-full rounded-[5px] border border-slate-300 bg-white px-3 pr-10 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                        />
+
+                        <button
+                          type="button"
+                          onClick={() => setShowConfirm(!showConfirm)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700"
+                        >
+                          {showConfirm ? (
+                            <EyeOff size={15} />
+                          ) : (
+                            <Eye size={15} />
+                          )}
+                        </button>
+                      </div>
+
+                      {confirmPassword && !passwordsMatch && (
+                        <p className="mt-1 text-[11px] text-red-500">
+                          Passwords do not match.
+                        </p>
+                      )}
+
+                      {passwordsMatch && (
+                        <p className="mt-1 text-[11px] text-green-600">
+                          ✓ Passwords match
+                        </p>
+                      )}
+                    </div>
                   </div>
 
-                  <div className="mt-5 flex items-center justify-between border-t border-slate-200 pt-3">
-                    <button
-                      type="button"
-                      onClick={() => setVerificationStep(2)}
-                      className="rounded-md border border-slate-300 px-3 py-2 text-xs"
-                    >
-                      Cancel
-                    </button>
+                  <div className="mt-4 rounded-md bg-amber-50 px-3 py-2 text-[11px] text-amber-700">
+                    <strong>Note:</strong> Your password must be exactly 8
+                    numeric digits (e.g. 12345678). Keep it confidential.
+                  </div>
 
-                    <button
-                      type="button"
-                      disabled={pin.length < 4}
-                      onClick={() => {
-                        if (pin.length >= 4) {
-                          // PIN ready; final submit neeche se hoga.
-                        }
-                      }}
-                      className="rounded-md bg-blue-600 px-5 py-2 text-xs font-medium text-white disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Done
-                    </button>
+                  <div className="mt-4 rounded-md border border-blue-200 bg-blue-50 p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <p className="text-[12px] font-semibold text-blue-700">Phone OTP Verification</p>
+                        <p className="mt-1 text-[11px] text-slate-600">
+                          {phoneOtpVerified ? "OTP verified successfully." : "Send a verification code to your official phone."}
+                        </p>
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={handleSendPhoneOTP}
+                        disabled={otpLoading || phoneOtpVerified}
+                        className="rounded-md bg-blue-600 px-3 py-2 text-[11px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                      >
+                        {otpLoading ? "Sending..." : phoneOtpSent ? "Resend OTP" : "Send OTP"}
+                      </button>
+                    </div>
+
+                    {phoneOtpSent && !phoneOtpVerified && (
+                      <div className="mt-3">
+                        <label className="mb-1 block text-[12px] font-semibold text-slate-700">Enter OTP</label>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            value={otpCode}
+                            onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                            maxLength={6}
+                            placeholder="123456"
+                            className="h-[36px] flex-1 rounded-[5px] border border-slate-300 bg-white px-3 text-sm text-slate-800 outline-none placeholder:text-slate-400 focus:border-blue-500 focus:ring-1 focus:ring-blue-500"
+                          />
+
+                          <button
+                            type="button"
+                            onClick={handleVerifyPhoneOTP}
+                            disabled={otpLoading}
+                            className="rounded-md bg-green-600 px-3 py-2 text-[11px] font-medium text-white disabled:cursor-not-allowed disabled:opacity-50"
+                          >
+                            Verify
+                          </button>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* ================= SCREEN 53: FINAL APPROVED ================= */}
               {verificationStep === 4 && (
                 <div className="rounded-lg border border-slate-300 bg-white p-5 shadow-sm">
                   <div className="text-center">
-                    <div className="mx-auto flex h-10 w-10 items-center justify-center rounded-lg bg-blue-50 text-blue-600">
-                      <ShieldCheck size={20} />
+                    <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100 text-green-600">
+                      <CheckCircle2 size={28} />
                     </div>
 
                     <h3 className="mt-3 text-sm font-semibold text-slate-900">
-                      Enter on Submit
+                      Registration Successful!
                     </h3>
 
-                    <p className="mt-1 text-[10px] leading-4 text-slate-500">
-                      Your official identity profile is undergoing final
-                      verification.
+                    <p className="mt-1 text-[11px] leading-4 text-slate-500">
+                      Your account has been created and is ready to use.
                     </p>
                   </div>
 
                   <div className="mt-5 space-y-3">
                     <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                       <span className="text-xs font-semibold text-slate-700">
-                        Official ID
+                        Full Name
                       </span>
 
-                      <span className="text-[10px] text-slate-800">
-                        #REC-2025-88402
+                      <span className="text-[11px] text-slate-800">
+                        {registeredUser?.fullName || "—"}
                       </span>
                     </div>
 
                     <div className="flex items-center justify-between border-b border-slate-200 pb-2">
                       <span className="text-xs font-semibold text-slate-700">
-                        Password
+                        Email
                       </span>
 
-                      <span className="text-[10px] text-slate-800">
-                        {pin || "••••"}
+                      <span className="text-[11px] text-slate-800">
+                        {registeredUser?.email || "—"}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between border-b border-slate-200 pb-2">
+                      <span className="text-xs font-semibold text-slate-700">
+                        Role
+                      </span>
+
+                      <span className="text-[11px] text-slate-800">
+                        {registeredUser?.role || "Viewer"}
                       </span>
                     </div>
 
@@ -598,7 +857,7 @@ export default function RegistrationStep3() {
                       </span>
 
                       <span className="rounded-full bg-green-100 px-3 py-1 text-[9px] font-semibold text-green-700">
-                        ✓ APPROVED
+                        {phoneOtpVerified ? "✓ OTP VERIFIED" : "✓ APPROVED"}
                       </span>
                     </div>
                   </div>
@@ -606,72 +865,90 @@ export default function RegistrationStep3() {
                   <button
                     type="button"
                     onClick={() => navigate("/dashboard")}
-                    className="mt-4 w-full rounded-md border border-slate-300 bg-white py-2 text-xs font-medium text-slate-800 hover:bg-slate-50"
+                    className="mt-4 w-full rounded-md bg-blue-600 py-2 text-xs font-semibold text-white hover:bg-blue-700"
                   >
-                    GO TO DASHBOARD
+                    GO TO DASHBOARD →
                   </button>
                 </div>
               )}
             </div>
 
             {/* ================= PAGE FOOTER ================= */}
-            <div className="flex items-center justify-end gap-2 border-t border-slate-200 px-7 py-3">
-              {verificationStep === 4 ? (
-                <button
-                  type="button"
-                  onClick={() => navigate("/")}
-                  className="flex h-[34px] items-center gap-1.5 rounded-md border border-slate-400 bg-white px-4 text-xs font-medium text-slate-700 hover:bg-slate-50"
-                >
-                  <ArrowLeft size={13} />
-                  Go to Login
-                </button>
-              ) : (
-                <>
+            <div className="flex flex-col items-end gap-2 border-t border-slate-200 px-7 py-3">
+              {/* Error banner (shown above the action buttons) */}
+              {error && (
+                <div className="w-full rounded-lg border border-red-200 bg-red-50 px-4 py-2 text-sm text-red-700">
+                  {error}
+                </div>
+              )}
+
+              <div className="flex items-center gap-2">
+                {verificationStep === 4 ? (
                   <button
                     type="button"
-                    onClick={() =>
-                      verificationStep === 1
-                        ? navigate("/register/step2")
-                        : setVerificationStep(
-                            (verificationStep - 1) as VerificationStep,
-                          )
-                    }
+                    onClick={() => navigate("/")}
                     className="flex h-[34px] items-center gap-1.5 rounded-md border border-slate-400 bg-white px-4 text-xs font-medium text-slate-700 hover:bg-slate-50"
                   >
                     <ArrowLeft size={13} />
-                    Back
+                    Go to Login
                   </button>
-
-                  {verificationStep < 3 ? (
+                ) : (
+                  <>
                     <button
                       type="button"
                       onClick={() =>
-                        setVerificationStep(
-                          (verificationStep + 1) as VerificationStep,
-                        )
+                        verificationStep === 1
+                          ? navigate("/register/step2")
+                          : setVerificationStep(
+                              (verificationStep - 1) as VerificationStep
+                            )
                       }
-                      className="flex h-[34px] items-center gap-1.5 rounded-md bg-blue-600 px-4 text-xs font-medium text-white hover:bg-blue-700"
+                      className="flex h-[34px] items-center gap-1.5 rounded-md border border-slate-400 bg-white px-4 text-xs font-medium text-slate-700 hover:bg-slate-50"
                     >
-                      Continue
-                      <ArrowRight size={13} />
+                      <ArrowLeft size={13} />
+                      Back
                     </button>
-                  ) : (
-                    <button
-                      type="button"
-                      onClick={handleSubmitRegistration}
-                      disabled={
-                        !faceVerified ||
-                        !biometricVerified ||
-                        pin.length < 4
-                      }
-                      className="flex h-[34px] items-center gap-1.5 rounded-md bg-blue-600 px-4 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
-                    >
-                      Submit Registration
-                      <ArrowRight size={13} />
-                    </button>
-                  )}
-                </>
-              )}
+
+                    {verificationStep < 3 ? (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setVerificationStep(
+                            (verificationStep + 1) as VerificationStep
+                          )
+                        }
+                        className="flex h-[34px] items-center gap-1.5 rounded-md bg-blue-600 px-4 text-xs font-medium text-white hover:bg-blue-700"
+                      >
+                        Continue
+                        <ArrowRight size={13} />
+                      </button>
+                    ) : (
+                      /* Step 3 → Submit Registration button */
+                      <button
+                        type="button"
+                        onClick={handleSubmitRegistration}
+                        disabled={
+                          !faceVerified ||
+                          !biometricVerified ||
+                          !passwordValid ||
+                          !passwordsMatch ||
+                          loading
+                        }
+                        className="flex h-[34px] items-center gap-1.5 rounded-md bg-blue-600 px-4 text-xs font-medium text-white hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-40"
+                      >
+                        {loading ? (
+                          "Submitting…"
+                        ) : (
+                          <>
+                            Submit Registration
+                            <ArrowRight size={13} />
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </>
+                )}
+              </div>
             </div>
           </div>
         </main>

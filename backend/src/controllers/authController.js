@@ -17,11 +17,27 @@ function signToken(user) {
 // Email OTP verification is temporarily disabled.
 async function register(req, res, next) {
   try {
-    const { fullName, email, password } = req.body;
+    const {
+      fullName,
+      email,
+      password,
+      dateOfBirth,
+      gender,
+      govIdType,
+      govIdNumber,
+      address,
+      department,
+      designation,
+      employeeId,
+      jurisdiction,
+      joiningDate,
+      supervisingOfficer,
+      officialEmail,
+      officialPhone,
+    } = req.body;
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Check whether account already exists.
     const existing = await User.findOne({
       email: normalizedEmail,
     });
@@ -33,13 +49,34 @@ async function register(req, res, next) {
       );
     }
 
-    // User.create() triggers the bcrypt pre-save hook
-    // in User.js, so the password is hashed automatically.
     const user = await User.create({
       fullName: fullName.trim(),
       email: normalizedEmail,
       password,
+      dateOfBirth: dateOfBirth?.trim() || '',
+      gender: gender?.trim() || '',
+      govIdType: govIdType?.trim() || '',
+      govIdNumber: govIdNumber?.trim() || '',
+      address: address?.trim() || '',
+      department: department?.trim() || '',
+      designation: designation?.trim() || '',
+      employeeId: employeeId?.trim() || '',
+      jurisdiction: jurisdiction?.trim() || '',
+      joiningDate: joiningDate?.trim() || '',
+      supervisingOfficer: supervisingOfficer?.trim() || '',
+      officialEmail: (officialEmail || normalizedEmail).trim().toLowerCase(),
+      officialPhone: officialPhone?.trim() || '',
     });
+
+    try {
+      await Audit.create({
+        type: 'registration',
+        text: `New user ${user.fullName} registered successfully`,
+        accessedBy: user.fullName,
+      });
+    } catch (auditError) {
+      console.error('Create registration audit log error:', auditError);
+    }
 
     const token = signToken(user);
 

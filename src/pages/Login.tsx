@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { sendPhoneOTP, verifyPhoneOTP } from "../lib/api";
 
 export default function Login() {
   const navigate = useNavigate();
@@ -14,6 +15,10 @@ export default function Login() {
   const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
+  const [otpRequired, setOtpRequired] = useState(false);
+  const [otpCode, setOtpCode] = useState("");
+  const [otpLoading, setOtpLoading] = useState(false);
+  const [otpPhone, setOtpPhone] = useState("");
 
   // STEP 1 → STEP 2
   const handleNext = (e: React.FormEvent) => {
@@ -60,11 +65,40 @@ export default function Login() {
         throw new Error(data.message || "Invalid email or password.");
       }
 
-      /*
-       * Store token according to Remember Me.
-       * kora_token is also stored because the rest of the
-       * application checks this key for authentication.
-       */
+      const user = data.user;
+      if (user) {
+        localStorage.setItem("user", JSON.stringify(user));
+      }
+
+      const phone = user?.officialPhone || user?.phone || "";
+
+      if (phone) {
+        setOtpPhone(phone);
+        setOtpRequired(true);
+        setOtpCode("");
+
+        try {
+          await sendPhoneOTP(phone);
+          setError("");
+        } catch (otpErr: any) {
+          setError(otpErr.message || "Unable to send OTP to your registered phone number.");
+          setOtpRequired(false);
+          return;
+        }
+
+        if (rememberMe) {
+          localStorage.setItem("kora_token", data.token);
+          localStorage.setItem("token", data.token);
+          sessionStorage.removeItem("token");
+        } else {
+          localStorage.removeItem("kora_token");
+          localStorage.removeItem("token");
+          sessionStorage.setItem("token", data.token);
+        }
+
+        localStorage.setItem("userName", username.trim());
+        return;
+      }
 
       if (rememberMe) {
         localStorage.setItem("kora_token", data.token);
@@ -76,15 +110,7 @@ export default function Login() {
         sessionStorage.setItem("token", data.token);
       }
 
-      // Store backend user
-      if (data.user) {
-        localStorage.setItem("user", JSON.stringify(data.user));
-      }
-
-      // Store the username entered in Step 2
       localStorage.setItem("userName", username.trim());
-
-      // Finally go to dashboard
       navigate("/dashboard");
     } catch (err: any) {
       setError(
@@ -92,6 +118,31 @@ export default function Login() {
       );
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleVerifyOtp = async () => {
+    if (!otpPhone) {
+      setError("No phone number is available for OTP verification.");
+      return;
+    }
+
+    if (!otpCode.trim() || otpCode.trim().length !== 6) {
+      setError("Please enter the 6-digit OTP sent to your phone.");
+      return;
+    }
+
+    setOtpLoading(true);
+    setError("");
+
+    try {
+      await verifyPhoneOTP(otpPhone, otpCode.trim());
+      localStorage.setItem("userName", username.trim());
+      navigate("/dashboard");
+    } catch (err: any) {
+      setError(err.message || "Invalid OTP. Please try again.");
+    } finally {
+      setOtpLoading(false);
     }
   };
 
@@ -336,65 +387,98 @@ export default function Login() {
 
                 {/* ================= STEP 2 ================= */}
                 {step === 2 && (
-                  <form onSubmit={handleSignIn}>
-                    {/* USERNAME */}
-                    <div className="mb-6">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Username
-                      </label>
+                  <form onSubmit={otpRequired ? (e) => { e.preventDefault(); void handleVerifyOtp(); } : handleSignIn}>
+                    {!otpRequired ? (
+                      <>
+                        <div className="mb-6">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Username
+                          </label>
 
-                      <div className="relative">
-                        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
-                          <svg
-                            width="19"
-                            height="19"
-                            viewBox="0 0 24 24"
-                            fill="none"
-                            stroke="currentColor"
-                            strokeWidth="1.8"
-                          >
-                            <circle cx="12" cy="8" r="4" />
-                            <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" />
-                          </svg>
-                        </span>
+                          <div className="relative">
+                            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400">
+                              <svg
+                                width="19"
+                                height="19"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="1.8"
+                              >
+                                <circle cx="12" cy="8" r="4" />
+                                <path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7" />
+                              </svg>
+                            </span>
 
-                        <input
-                          type="text"
-                          value={username}
-                          onChange={(e) => setUsername(e.target.value)}
-                          placeholder="Enter your username"
-                          autoFocus
-                          className="w-full rounded-lg border border-gray-300 bg-white py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
-                        />
-                      </div>
+                            <input
+                              type="text"
+                              value={username}
+                              onChange={(e) => setUsername(e.target.value)}
+                              placeholder="Enter your username"
+                              autoFocus
+                              className="w-full rounded-lg border border-gray-300 bg-white py-3 pl-11 pr-4 text-sm text-gray-800 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                            />
+                          </div>
 
-                      <p className="mt-2 text-xs text-gray-500">
-                        Enter the username associated with your JANMITRA
-                        account.
-                      </p>
-                    </div>
+                          <p className="mt-2 text-xs text-gray-500">
+                            Enter the username associated with your JANMITRA
+                            account.
+                          </p>
+                        </div>
 
-                    {/* SIGN IN */}
-                    <button
-                      type="submit"
-                      disabled={loading}
-                      className="w-full rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
-                    >
-                      {loading ? (
-                        "Signing In..."
-                      ) : (
-                        <span className="flex items-center justify-center gap-2">
-                          Sign In
-                          <span className="text-lg leading-none">→</span>
-                        </span>
-                      )}
-                    </button>
+                        <button
+                          type="submit"
+                          disabled={loading}
+                          className="w-full rounded-lg bg-blue-600 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-blue-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {loading ? (
+                            "Signing In..."
+                          ) : (
+                            <span className="flex items-center justify-center gap-2">
+                              Sign In
+                              <span className="text-lg leading-none">→</span>
+                            </span>
+                          )}
+                        </button>
+                      </>
+                    ) : (
+                      <>
+                        <div className="mb-5">
+                          <label className="block text-sm font-medium text-gray-700 mb-2">
+                            One-Time Password
+                          </label>
 
-                    {/* BACK */}
+                          <input
+                            type="text"
+                            value={otpCode}
+                            onChange={(e) => setOtpCode(e.target.value.replace(/\D/g, "").slice(0, 6))}
+                            placeholder="Enter 6-digit OTP"
+                            maxLength={6}
+                            autoFocus
+                            className="w-full rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm text-gray-800 outline-none transition focus:border-blue-600 focus:ring-2 focus:ring-blue-100"
+                          />
+
+                          <p className="mt-2 text-xs text-gray-500">
+                            OTP sent to {otpPhone}
+                          </p>
+                        </div>
+
+                        <button
+                          type="submit"
+                          disabled={otpLoading}
+                          className="w-full rounded-lg bg-green-600 py-3 text-sm font-semibold text-white shadow-sm transition hover:bg-green-700 active:scale-[0.99] disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          {otpLoading ? "Verifying OTP..." : "Verify OTP & Continue"}
+                        </button>
+                      </>
+                    )}
+
                     <button
                       type="button"
                       onClick={() => {
                         setError("");
+                        setOtpRequired(false);
+                        setOtpCode("");
                         setStep(1);
                       }}
                       className="w-full mt-3 rounded-lg border border-gray-300 py-3 text-sm font-medium text-gray-700 transition hover:bg-gray-50"

@@ -129,7 +129,8 @@ export async function login(
 export async function register(
   fullName: string,
   email: string,
-  password: string
+  password: string,
+  extraData: Record<string, any> = {}
 ): Promise<any> {
   const data = await request('/auth/register', {
     method: 'POST',
@@ -138,12 +139,45 @@ export async function register(
       fullName,
       email,
       password,
+      ...extraData,
     },
   });
 
   persistSession(data);
 
   return data.user;
+}
+
+export async function sendPhoneOTP(phone: string): Promise<any> {
+  return request('/phone-otp/send', {
+    method: 'POST',
+    auth: false,
+    body: { phone },
+  });
+}
+
+export async function verifyPhoneOTP(phone: string, otp: string): Promise<any> {
+  return request('/phone-otp/verify', {
+    method: 'POST',
+    auth: false,
+    body: { phone, otp },
+  });
+}
+
+export async function sendEmailOTP(email: string): Promise<any> {
+  return request('/otp/send', {
+    method: 'POST',
+    auth: false,
+    body: { email },
+  });
+}
+
+export async function verifyEmailOTP(email: string, otp: string): Promise<any> {
+  return request('/otp/verify', {
+    method: 'POST',
+    auth: false,
+    body: { email, otp },
+  });
 }
 
 // Register-or-login

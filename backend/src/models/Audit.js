@@ -9,7 +9,7 @@ const auditSchema = new mongoose.Schema(
 
     type: {
       type: String,
-      enum: ['document', 'review', 'login', 'approval'],
+      enum: ['document', 'review', 'login', 'approval', 'registration'],
       required: true,
     },
 

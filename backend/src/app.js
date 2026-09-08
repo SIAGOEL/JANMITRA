@@ -2,14 +2,16 @@ const express = require('express');
 const cors = require('cors');
 const morgan = require('morgan');
 
-const authRoutes = require('./routes/authRoutes');
-const caseRoutes = require('./routes/caseRoutes');
+const authRoutes     = require('./routes/authRoutes');
+const caseRoutes     = require('./routes/caseRoutes');
 const documentRoutes = require('./routes/documentRoutes');
-const draftRoutes = require('./routes/draftRoutes');
-const otpRoutes = require('./routes/otpRoutes');
+const draftRoutes    = require('./routes/draftRoutes');
+const otpRoutes      = require('./routes/otpRoutes');
 const phoneOTPRoutes = require('./routes/phoneOTPRoutes');
+const userRoutes     = require('./routes/userRoutes');
+const auditRoutes    = require('./routes/auditRoutes');
 const { notFound, errorHandler } = require('./middleware/errorHandler');
-const auditRoutes = require('./routes/auditRoutes');
+
 const app = express();
 
 // ------- Global middleware -------
@@ -58,6 +60,15 @@ app.use("/api/draft", draftRoutes);
 app.use("/api/otp", otpRoutes);
 app.use("/api/phone-otp", phoneOTPRoutes);
 app.use("/api/documents", documentRoutes);
+app.use("/api/users", userRoutes);
+
+// Root route (Placed before error handlers)
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "Backend server is up and running!"
+  });
+});
 
 // ------- Error handling (keep last) -------
 app.use(notFound);

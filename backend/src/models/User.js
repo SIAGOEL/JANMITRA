@@ -16,6 +16,85 @@ const userSchema = new mongoose.Schema(
       required: true,
     },
 
+    dateOfBirth: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
+    gender: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
+    govIdType: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
+    govIdNumber: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
+    address: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
+    department: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
+    designation: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
+    employeeId: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
+    jurisdiction: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
+    joiningDate: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
+    supervisingOfficer: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
+    officialEmail: {
+      type: String,
+      trim: true,
+      lowercase: true,
+      default: '',
+    },
+
+    officialPhone: {
+      type: String,
+      trim: true,
+      default: '',
+    },
+
     email: {
       type: String,
       required: [true, 'Email is required'],

@@ -2,7 +2,10 @@ const crypto = require('crypto');
 const { Resend } = require('resend');
 const EmailOTP = require('../models/EmailOTP');
 
-const resend = new Resend(process.env.RESEND_API_KEY);
+const resend = process.env.RESEND_API_KEY
+
+ ? new Resend (process.env.RESEND_API_KEY)
+ : null;
 
 function generateOTP() {
   return crypto.randomInt(100000, 1000000).toString();
